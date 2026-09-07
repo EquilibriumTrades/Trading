@@ -64,6 +64,16 @@ docker compose up -d
 
 Deploy anywhere a Node process and a persistent disk exist: Docker, Railway, Fly.io, a small VPS. Serverless platforms without a disk need an external database, which v0.1 does not support. SQLite on disk is the point.
 
+Historical market data connections power estimated MAE/MFE and candle replay on closed
+trades, while Vela continues to render charts. Choose an optional data connection
+or upload your own candle CSVs. No provider is enabled or selected by default. See the
+[market data guide](docs/market-data.md) for setup, calculation definitions and coverage limits.
+
+The **Prop firms** sidebar tracks evaluation/reset costs, refunds, payout requests and actual
+receipts across your own firms and accounts. It includes cash ROI, partial payouts, reversals,
+renewal reminders, attachments and generic CSV import/export. See the
+[prop firm guide and research](docs/prop-firms.md) for workflows and metric definitions.
+
 ## Why this exists
 
 A trade journal is two things: a **verified record** of what you actually did, and the **reflection** that turns that record into better trading. Trade Journal keeps the record on your own machine and opens the reflection layer to any tool you choose, including your own AI.
@@ -97,7 +107,7 @@ flowchart LR
 | **Round-trip engine**    | Flat-to-flat position cycles from raw fills. FIFO / LIFO / weighted-average per account. Partial fills, scale-ins, flips, futures multipliers. Annotations survive rebuilds.                                                                                                                                                                                                                                                                        |
 | **Analytics**            | Net/gross P&L, win and day-win rates, profit factor, expectancy, R multiples, streaks, drawdown and recovery, profit concentration, duration/time-of-day/weekday performance, per-symbol/tag/mistake/playbook breakdowns. Advanced filters on every dimension, comparison groups, and a two-way cross-analysis matrix.                                                                                                                              |
 | **Dashboard**            | P&L calendar with weekly totals, cumulative and daily P&L, gauges, the open **Edge Score** radar, open positions, time-of-day performance. Drag cards to rearrange, hide what you don't use, save named layouts. Responsive down to a phone.                                                                                                                                                                                                        |
-| **Trade pages**          | Charted on [Vela](https://www.npmjs.com/package/@luxalgo/vela) with entry/exit markers and P&L labels: real candles for crypto (keyless public data), honest fill-path rendering everywhere else. Running P&L, executions, ratings, stops/targets, tags, mistakes.                                                                                                                                                                                  |
+| **Trade pages**          | Charted on [Vela](https://www.npmjs.com/package/@luxalgo/vela) with entry/exit markers and P&L labels: fill paths from recorded executions, optional user-selected market candles, and trade replay. Estimated MAE/MFE, running P&L, executions, ratings, stops/targets, tags, mistakes.                                                                                                                                                            |
 | **Daily journal**        | Day stats, intraday P&L curve, autosaving Markdown notes with templates and attachments (images, PDFs). Type them or **dictate** them (browser speech, zero keys, zero cost).                                                                                                                                                                                                                                                                       |
 | **Notebook & playbooks** | Folders, search, tags, trade links; named setups with rule checklists scored per trade, with adherence and followed-vs-broken performance in Reports.                                                                                                                                                                                                                                                                                               |
 | **AI reflection**        | Bring your own Anthropic API key: session recaps, per-trade critiques, "ask your journal" over your own aggregates. Key encrypted at rest; requests go from your server to the model, nowhere else.                                                                                                                                                                                                                                                 |

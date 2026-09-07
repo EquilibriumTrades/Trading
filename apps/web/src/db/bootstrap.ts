@@ -74,6 +74,25 @@ CREATE INDEX IF NOT EXISTS trades_symbol ON trades (symbol);
 CREATE INDEX IF NOT EXISTS trades_opened ON trades (opened_at);
 CREATE INDEX IF NOT EXISTS trades_account_opened ON trades (account_id, opened_at);
 
+CREATE TABLE IF NOT EXISTS market_csv_datasets (
+ id TEXT PRIMARY KEY, name TEXT NOT NULL, symbol TEXT NOT NULL,
+ resolution TEXT NOT NULL, currency TEXT NOT NULL, price_basis TEXT NOT NULL,
+ bars_json TEXT NOT NULL, imported_at TEXT NOT NULL,
+ bar_count INTEGER NOT NULL, first_time INTEGER NOT NULL, last_time INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS market_csv_symbol_resolution ON market_csv_datasets(symbol, resolution);
+
+CREATE TABLE IF NOT EXISTS trade_excursions (
+  trade_key TEXT PRIMARY KEY REFERENCES trades(key) ON DELETE CASCADE,
+  fingerprint TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  symbol TEXT NOT NULL,
+  resolution TEXT NOT NULL,
+  fetched_at TEXT NOT NULL,
+  estimate_json TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS journal_days (
   date TEXT PRIMARY KEY,
   note TEXT NOT NULL DEFAULT '',
@@ -129,4 +148,32 @@ INSERT OR IGNORE INTO folders (id, name, kind, created_at) VALUES
   ('daily-journal', 'Daily journal', 'system', '2026-01-01T00:00:00Z'),
   ('session-recaps', 'Session recaps', 'system', '2026-01-01T00:00:00Z'),
   ('my-notes', 'My notes', 'system', '2026-01-01T00:00:00Z');
+
+CREATE TABLE IF NOT EXISTS prop_accounts (
+ id TEXT PRIMARY KEY, firm TEXT NOT NULL, name TEXT NOT NULL, program TEXT NOT NULL,
+ status TEXT NOT NULL, currency TEXT NOT NULL, size_minor INTEGER, parent_id TEXT REFERENCES prop_accounts(id),
+ journal_account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL,
+ opened_on TEXT NOT NULL, closed_on TEXT, renewal_on TEXT, renewal_minor INTEGER, notes TEXT NOT NULL DEFAULT '',
+ archived INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS prop_entries (
+ id TEXT PRIMARY KEY, account_id TEXT REFERENCES prop_accounts(id), firm TEXT NOT NULL, kind TEXT NOT NULL,
+ category TEXT NOT NULL, currency TEXT NOT NULL, amount_minor INTEGER NOT NULL, split_bps INTEGER NOT NULL,
+ fee_minor INTEGER NOT NULL, occurred_on TEXT NOT NULL, due_on TEXT, status TEXT NOT NULL,
+ parent_id TEXT REFERENCES prop_entries(id), reference TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
+ voided INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS prop_entries_account_date ON prop_entries(account_id, occurred_on);
+CREATE INDEX IF NOT EXISTS prop_entries_date ON prop_entries(occurred_on);
+CREATE TABLE IF NOT EXISTS prop_receipts (
+ id TEXT PRIMARY KEY, payout_id TEXT NOT NULL REFERENCES prop_entries(id), kind TEXT NOT NULL, amount_minor INTEGER NOT NULL,
+ occurred_on TEXT NOT NULL, reference TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
+ voided INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS prop_receipts_payout ON prop_receipts(payout_id);
+CREATE TABLE IF NOT EXISTS prop_audit (
+ id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, before_json TEXT,
+ after_json TEXT NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS prop_audit_entity ON prop_audit(entity_type, entity_id);
 `;

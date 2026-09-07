@@ -1,7 +1,7 @@
 "use client";
 import { MonetaryField } from "@/components/privacy";
 
-import { Suspense, useState } from "react";
+import { Suspense, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileUp, Landmark, PencilLine } from "lucide-react";
 import { FilterBar } from "@/components/filter-bar";
@@ -114,14 +114,65 @@ function AccountPicker({
   onChange: (id: string) => void;
   kind: "import" | "manual";
 }) {
-  const { data, refresh } = useApi<{ accounts: AccountRow[] }>("/api/accounts");
-  const accounts = data?.accounts.filter((account) => !account.archivedAt) ?? [];
+  const {
+    data,
+    refresh,
+    error: accountError,
+  } = useApi<{ accounts: AccountRow[] }>("/api/accounts");
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [currency, setCurrency] = useState("USD");
+  const [balance, setBalance] = useState("0");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [created, setCreated] = useState<AccountRow[]>([]);
+  const fieldId = useId();
+  const accounts = [
+    ...(data?.accounts ?? []),
+    ...created.filter((item) => !data?.accounts.some((row) => row.id === item.id)),
+  ].filter((account) => !account.archivedAt);
+  const create = async () => {
+    if (
+      saving ||
+      !name.trim() ||
+      !/^[A-Z]{3}$/.test(currency) ||
+      !balance.trim() ||
+      !Number.isFinite(Number(balance)) ||
+      Number(balance) < 0
+    )
+      return;
+    setSaving(true);
+    setError("");
+    try {
+      const result = await postJson<{ id: string }>("/api/accounts", {
+        name: name.trim(),
+        kind,
+        currency,
+        initialBalance: Number(balance),
+      });
+      setCreated((current) => [
+        ...current,
+        { id: result.id, name: name.trim(), kind, archivedAt: null },
+      ]);
+      onChange(result.id);
+      refresh();
+      setCreating(false);
+      setName("");
+      setBalance("0");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Account creation failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
     <div className="flex min-w-0 flex-wrap items-end gap-2">
       <div className="min-w-0 flex-[1_1_180px]">
-        <Label className="mb-1 block text-xs text-muted-foreground">Into account</Label>
+        <Label htmlFor={`${fieldId}-account`} className="mb-1 block text-xs text-muted-foreground">
+          Into account
+        </Label>
         <Select value={value} onValueChange={onChange}>
-          <SelectTrigger>
+          <SelectTrigger id={`${fieldId}-account`}>
             <SelectValue placeholder="Choose an account" />
           </SelectTrigger>
           <SelectContent>
@@ -134,17 +185,91 @@ function AccountPicker({
         </Select>
       </div>
       <Button
+        type="button"
         variant="outline"
-        onClick={async () => {
-          const name = prompt("New account name");
-          if (!name) return;
-          const result = await postJson<{ id: string }>("/api/accounts", { name, kind });
-          refresh();
-          onChange(result.id);
+        aria-expanded={creating}
+        onClick={() => {
+          setCreating(!creating);
+          setError("");
         }}
+        disabled={saving}
       >
-        New account
+        {creating ? "Cancel new account" : "New account"}
       </Button>
+      {accountError && (
+        <p role="alert" className="w-full text-sm text-destructive">
+          {accountError}
+        </p>
+      )}
+      {creating && (
+        <form
+          className="w-full space-y-3 rounded-lg border p-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!saving) void create();
+          }}
+        >
+          <h3 className="text-sm font-medium">Create account</h3>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1">
+              <Label htmlFor={`${fieldId}-name`}>Account name</Label>
+              <Input
+                id={`${fieldId}-name`}
+                autoFocus
+                required
+                maxLength={120}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                disabled={saving}
+                placeholder="Trading test account"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`${fieldId}-currency`}>Currency</Label>
+              <Input
+                id={`${fieldId}-currency`}
+                required
+                pattern="[A-Z]{3}"
+                maxLength={3}
+                value={currency}
+                onChange={(event) => setCurrency(event.target.value.toUpperCase())}
+                disabled={saving}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`${fieldId}-balance`}>Starting balance</Label>
+              <Input
+                id={`${fieldId}-balance`}
+                required
+                type="number"
+                min="0"
+                step="0.01"
+                value={balance}
+                onChange={(event) => setBalance(event.target.value)}
+                disabled={saving}
+              />
+            </div>
+          </div>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <Button
+            type="submit"
+            disabled={
+              saving ||
+              !name.trim() ||
+              !/^[A-Z]{3}$/.test(currency) ||
+              !balance.trim() ||
+              !Number.isFinite(Number(balance)) ||
+              Number(balance) < 0
+            }
+          >
+            {saving ? "Creating…" : "Create account"}
+          </Button>
+        </form>
+      )}
     </div>
   );
 }

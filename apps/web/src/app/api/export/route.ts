@@ -13,6 +13,10 @@ import {
   progressChecks,
   missedTrades,
   folders,
+  propAccounts,
+  propEntries,
+  propReceipts,
+  propAudit,
 } from "@/db";
 import { readFilters } from "@luxalgo/journal-core";
 import { queryTrades } from "@/server/trades-query";
@@ -83,6 +87,10 @@ export const GET = handler(async (request: Request) => {
     progressRules: db.select().from(progressRules).all(),
     progressChecks: db.select().from(progressChecks).all(),
     missedTrades: db.select().from(missedTrades).all(),
+    propAccounts: db.select().from(propAccounts).all(),
+    propEntries: db.select().from(propEntries).all(),
+    propReceipts: db.select().from(propReceipts).all(),
+    propAudit: db.select().from(propAudit).all(),
     journalDefaults: getJournalDefaults(),
     settings: { timeZone: getTimeZone(), multipliers: getMultipliers() },
     // Metadata only: attachment binaries stay in the data directory.

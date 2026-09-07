@@ -1,9 +1,21 @@
 import { and, eq } from "drizzle-orm";
-import { db, attachments, trades, notes, missedTrades } from "@/db";
+import { db, attachments, trades, notes, missedTrades, propAccounts, propEntries } from "@/db";
 import { handler, ok, requireValue } from "@/server/api";
 import { newId, nowIso } from "@/server/ids";
 import { attachmentMime, MAX_ATTACHMENT_SIZE } from "@/lib/attachment-validation";
 function owner(type: string, id: string) {
+  if (type === "prop-account")
+    return !!db
+      .select({ id: propAccounts.id })
+      .from(propAccounts)
+      .where(eq(propAccounts.id, id))
+      .get();
+  if (type === "prop-entry")
+    return !!db
+      .select({ id: propEntries.id })
+      .from(propEntries)
+      .where(eq(propEntries.id, id))
+      .get();
   if (type === "trade")
     return !!db.select({ key: trades.key }).from(trades).where(eq(trades.key, id)).get();
   if (type === "note")

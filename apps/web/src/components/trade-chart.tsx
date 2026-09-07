@@ -5,14 +5,14 @@ import { fmtMoney } from "@/lib/utils";
 import { usePrivacy } from "./privacy";
 import { EquityArea } from "./charts/equity-area";
 
-interface ChartExecution {
+export interface ChartExecution {
   side: "buy" | "sell";
   quantity: number;
   price: number;
   executedAt: string;
 }
 
-interface ChartTrade {
+export interface ChartTrade {
   key: string;
   symbol: string;
   assetClass?: string | null;
@@ -23,11 +23,6 @@ interface ChartTrade {
   avgEntry: number;
   avgExit?: number | null;
 }
-
-/** Crypto symbols get live candles from Vela's keyless public providers. */
-const looksCrypto = (trade: ChartTrade): boolean =>
-  trade.assetClass === "crypto" ||
-  /^[A-Z0-9]{2,10}(USDT|USDC|USD|PERP|BTC|ETH)(\.P)?$/.test(trade.symbol);
 
 /** Pick a timeframe that gives the trade ~30-200 bars of context. */
 const timeframeFor = (durationMs: number): string => {
@@ -44,10 +39,8 @@ const timeframeFor = (durationMs: number): string => {
  * painted as arrow labels (shape + position carry the side; color reinforces),
  * connected by a dashed line with the net P&L at the exit.
  *
- * Crypto trades chart on real candles from Vela's public Binance/Coinbase
- * providers — no API key. Everything else charts offline on the trade's own
- * fills (a price path of what actually happened), because a journal fabricates
- * nothing it doesn't know.
+ * The initial chart uses recorded fills only. Market candles are supplied through
+ * the separate, explicitly selected market-data connection and replay flow.
  */
 export function TradeChart(props: {
   trade: ChartTrade;
@@ -115,7 +108,6 @@ function PriceChart({
         : Date.parse(sorted.at(-1)!.executedAt);
       const durationMs = Math.max(closeMs - openMs, 60_000);
       const pad = Math.max(durationMs * 0.35, 15 * 60_000);
-      const crypto = looksCrypto(trade);
 
       let profitColor = dark ? "#0ca30c" : "#006300";
       const lossColor = "#d03b3b";
@@ -208,34 +200,26 @@ function PriceChart({
         }),
       });
 
-      // Offline mode charts the trade's own fills as the price series — a
-      // journal charts what happened, it doesn't invent bars it never saw.
-      const buildChart = (offline: boolean) =>
-        new Vela(host, {
-          symbol: trade.symbol,
-          timeframe: timeframeFor(durationMs),
-          theme: dark ? "dark" : "light",
-          height,
-          live: false,
-          volume: crypto && !offline,
-          drawings: false,
-          visibleRange: { from: openMs - pad, to: closeMs + pad },
-          priceStyle: crypto && !offline ? "candles" : "line",
-          ...(crypto && !offline
-            ? {}
-            : {
-                data: sorted.map((execution) => ({
-                  time: Date.parse(execution.executedAt),
-                  open: execution.price,
-                  high: execution.price,
-                  low: execution.price,
-                  close: execution.price,
-                  volume: 0,
-                })),
-              }),
-        });
-
-      let chart = buildChart(!crypto);
+      // Vela renders supplied fills only; opening a trade never selects a data provider.
+      const chart = new Vela(host, {
+        symbol: trade.symbol,
+        timeframe: timeframeFor(durationMs),
+        theme: dark ? "dark" : "light",
+        height,
+        live: false,
+        volume: false,
+        drawings: false,
+        visibleRange: { from: openMs - pad, to: closeMs + pad },
+        priceStyle: "line",
+        data: sorted.map((execution) => ({
+          time: Date.parse(execution.executedAt),
+          open: execution.price,
+          high: execution.price,
+          low: execution.price,
+          close: execution.price,
+          volume: 0,
+        })),
+      });
       let indicator = chart.addNativeIndicator(type);
       const themeObserver = new MutationObserver(() => {
         const nextDark = document.documentElement.classList.contains("dark");
@@ -257,34 +241,6 @@ function PriceChart({
         chart.destroy();
         unregisterNativeIndicator(type);
       };
-
-      if (crypto) {
-        // The feed PARKS the first load until a provider resolves the symbol,
-        // so registration drives the load — await it (it fetches the venue's
-        // symbol listing), then await the bars themselves. If no feed is
-        // reachable, fall back to the offline fill path instead of an empty pane.
-        try {
-          const [{ BinanceProvider }, { CoinbaseProvider }] = await Promise.all([
-            import("@luxalgo/vela/providers/binance"),
-            import("@luxalgo/vela/providers/coinbase"),
-          ]);
-          if (disposed) return;
-          await Promise.race([
-            Promise.all([
-              chart.data.registerProvider("binance", new BinanceProvider()),
-              chart.data.registerProvider("coinbase", new CoinbaseProvider()),
-            ]).then(() => chart.ready()),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("candle feed timeout")), 10_000),
-            ),
-          ]);
-        } catch {
-          if (disposed) return;
-          chart.destroy();
-          chart = buildChart(true);
-          indicator = chart.addNativeIndicator(type);
-        }
-      }
     })();
 
     return () => {
@@ -296,13 +252,10 @@ function PriceChart({
   return (
     <figure>
       <div ref={hostRef} style={{ height }} className="overflow-hidden rounded-lg border" />
-      {!looksCrypto(trade) && (
-        <figcaption className="mt-1.5 px-1 text-xs text-muted-foreground">
-          Price path drawn from your own fills. Live candles render for symbols with a public
-          keyless feed (crypto via Binance / Coinbase); this journal never fabricates bars it
-          didn&apos;t see.
-        </figcaption>
-      )}
+      <figcaption className="mt-1.5 px-1 text-xs text-muted-foreground">
+        Price path from recorded fills. To view market candles, choose a data source and load
+        history in Market data &amp; replay.
+      </figcaption>
     </figure>
   );
 }

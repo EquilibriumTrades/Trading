@@ -27,18 +27,22 @@ export function EquityArea({
   height = 240,
   valueFormat = "money",
   valueLabel = "Cumulative P&L",
+  currency = "USD",
+  curve = "monotone",
 }: {
   data: EquityPointDatum[];
   height?: number;
   valueFormat?: "money" | "percent";
   valueLabel?: string;
+  currency?: string;
+  curve?: "monotone" | "stepAfter";
 }) {
   const t = useVizTokens();
   const id = useId().replace(/:/g, "");
   const privacy = usePrivacy();
   const privateMode = privacy && valueFormat === "money";
   const formatValue = (value: number) =>
-    valueFormat === "percent" ? fmtPercent(value, 2) : fmtMoney(value);
+    valueFormat === "percent" ? fmtPercent(value, 2) : fmtMoney(value, currency);
   if (!t) return <div style={{ height }} />;
   const line = t.brand;
   const top = Math.max(0, ...data.map((point) => point.cumNetPnl));
@@ -91,13 +95,13 @@ export function EquityArea({
             cursor={{ stroke: t.inkMuted, strokeDasharray: "3 3" }}
           />
           <Area
-            type="monotone"
+            type={curve}
             dataKey="cumNetPnl"
             stroke={bottom < 0 ? (top > 0 ? `url(#${id}-line)` : t.loss) : line}
             strokeWidth={2}
             fill={`url(#${id}-fill)`}
             baseValue={0}
-            dot={false}
+            dot={data.length === 1 ? { r: 3 } : false}
             activeDot={({ cx, cy, payload }) => (
               <circle
                 cx={cx}

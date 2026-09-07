@@ -7,7 +7,7 @@ import { Sparkles, Star } from "lucide-react";
 import { FilterBar } from "@/components/filter-bar";
 import { Pnl } from "@/components/pnl";
 import { MonetaryValue, MonetaryField } from "@/components/privacy";
-import { TradeChart } from "@/components/trade-chart";
+import { TradeMarketData } from "@/components/trade-market-data";
 import { EquityArea } from "@/components/charts/equity-area";
 import { VoiceNote } from "@/components/voice-note";
 import { Badge } from "@/components/ui/badge";
@@ -205,7 +205,7 @@ function TradeView({ tradeKey }: { tradeKey: string }) {
             </CardContent>
           </Card>
 
-          <TradeChart trade={trade} executions={executions} />
+          <TradeMarketData trade={trade} executions={executions} />
 
           {runningPnl.length > 1 && (
             <Card>
