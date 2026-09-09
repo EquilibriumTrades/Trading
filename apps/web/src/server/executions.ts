@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { ImportedExecution } from "@luxalgo/journal-importers";
-import { db, executions, accounts } from "@/db";
+import { db, executions, accounts, trades } from "@/db";
 import { executionHash, newId, nowIso } from "./ids";
 import { rebuildAccount } from "./rebuild";
 import { getJournalDefaults } from "./settings";
@@ -83,12 +83,18 @@ export const partitionExecutions = (
   return { usable, skipped, skippedReasons };
 };
 
-/** Insert executions with content-hash dedup, then rebuild the account's trades. */
+/** Insert fills, rebuild trades, and attach optional manual notes in one transaction. */
 export const insertExecutions = (
   accountId: string,
   rows: ImportedExecution[],
   source: ExecutionSource,
+  manualNotes?: string,
 ): InsertResult => {
+  requireValue(
+    manualNotes === undefined ||
+      (source === "manual" && typeof manualNotes === "string" && manualNotes.length <= 100000),
+    "Manual trade notes must be at most 100,000 characters.",
+  );
   requireValue(
     db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, accountId)).get(),
     "Account not found.",
@@ -98,13 +104,17 @@ export const insertExecutions = (
   let duplicates = 0;
   const createdAt = nowIso();
   const defaults = getJournalDefaults();
+  const note = manualNotes?.trim() ? manualNotes : undefined;
 
   db.transaction((tx) => {
+    const noteExecutionIds = new Set<string>();
     for (const row of usable) {
+      const id = newId();
+      const contentHash = executionHash(row);
       const result = tx
         .insert(executions)
         .values({
-          id: newId(),
+          id,
           accountId,
           symbol: row.symbol,
           side: row.side,
@@ -117,15 +127,53 @@ export const insertExecutions = (
           assetClass: row.assetClass ?? null,
           source,
           importMetadataJson: row.importMetadata ? JSON.stringify(row.importMetadata) : null,
-          contentHash: executionHash(row),
+          contentHash,
           createdAt,
         })
         .onConflictDoNothing()
         .run();
-      if (result.changes > 0) inserted++;
-      else duplicates++;
+      if (result.changes > 0) {
+        inserted++;
+        if (note) noteExecutionIds.add(id);
+      } else {
+        duplicates++;
+        if (note) {
+          const existing = tx
+            .select({ id: executions.id })
+            .from(executions)
+            .where(
+              and(eq(executions.accountId, accountId), eq(executions.contentHash, contentHash)),
+            )
+            .get();
+          if (existing) noteExecutionIds.add(existing.id);
+        }
+      }
     }
     if (inserted > 0) rebuildAccount(accountId);
+    if (note) {
+      const affected = tx
+        .select({
+          key: trades.key,
+          notes: trades.notes,
+          executionIdsJson: trades.executionIdsJson,
+        })
+        .from(trades)
+        .where(eq(trades.accountId, accountId))
+        .all();
+      for (const trade of affected) {
+        const ids = JSON.parse(trade.executionIdsJson) as string[];
+        if (!ids.some((id) => noteExecutionIds.has(id))) continue;
+        // Keep prior annotations when these fills extend or close an existing position.
+        // Retrying the same submission must not append the note a second time.
+        if (trade.notes === note || trade.notes?.endsWith(`\n\n${note}`)) continue;
+        const notes = trade.notes?.trim() ? `${trade.notes}\n\n${note}` : note;
+        requireValue(
+          notes.length <= 100000,
+          "Combined trade notes must be at most 100,000 characters.",
+        );
+        tx.update(trades).set({ notes }).where(eq(trades.key, trade.key)).run();
+      }
+    }
   });
 
   return { inserted, duplicates, skipped, skippedReasons };

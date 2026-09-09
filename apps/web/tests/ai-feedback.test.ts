@@ -29,6 +29,14 @@ describe("AI feedback", () => {
     expect(recap.title).toBe("No trades to recap yet");
     expect(recap.retry).toBeUndefined();
   });
+  it("recognizes OpenAI credentials, quota and model errors without showing key fragments", () => {
+    const notice = aiFeedback("Incorrect API key provided: sk-proj-PRIVATE");
+    expect(notice.action?.label).toBe("Review AI settings");
+    expect(JSON.stringify(notice)).not.toContain("PRIVATE");
+    expect(aiFeedback("insufficient_quota").title).toBe("Your AI account needs attention");
+    expect(aiFeedback("You exceeded your current quota").retry).toBeUndefined();
+    expect(aiFeedback("AI model unavailable").title).toBe("Check your AI model");
+  });
   it("offers recovery for network and session failures", () => {
     expect(aiFeedback("Failed to fetch")).toMatchObject({
       title: "Couldn’t connect to AI",

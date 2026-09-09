@@ -14,7 +14,7 @@ const SUGGESTIONS = [
   "Am I better at longs or shorts?",
 ];
 
-/** Natural-language questions against your own aggregates — BYO Anthropic key. */
+/** Natural-language questions against your own aggregates — BYO AI provider key. */
 export function AskJournal() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);

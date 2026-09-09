@@ -3,18 +3,21 @@ import { rebuildAccount } from "@/server/rebuild";
 import { handler, ok, requireValue } from "@/server/api";
 import {
   getMultipliers,
-  getSetting,
   getTimeZone,
-  setAnthropicKey,
+  aiKeyEnvironment,
+  aiModelSetting,
+  getAiProvider,
+  getAiSettings,
+  setAiKey,
   setSetting,
 } from "@/server/settings";
+import { AI_PROVIDERS, AI_PROVIDER_NAMES, isAiProvider, type AiProvider } from "@/lib/ai-settings";
 
 export const GET = handler(() =>
   ok({
     timeZone: getTimeZone(),
     multipliers: getMultipliers(),
-    aiConfigured: Boolean(process.env.ANTHROPIC_API_KEY || getSetting("anthropicKeyEnc")),
-    aiModel: getSetting("aiModel") ?? "claude-opus-5",
+    ...getAiSettings(),
   }),
 );
 
@@ -23,11 +26,39 @@ interface SettingsBody {
   multipliers?: Record<string, number>;
   /** Set to a key string to store (encrypted), or null to clear. Absent = unchanged. */
   anthropicKey?: string | null;
+  openaiKey?: string | null;
+  aiProvider?: AiProvider;
   aiModel?: string;
 }
 
 export const PATCH = handler(async (request: Request) => {
   const body = (await request.json()) as SettingsBody;
+  requireValue(body && typeof body === "object" && !Array.isArray(body), "Enter valid settings.");
+  if (body.aiProvider !== undefined)
+    requireValue(isAiProvider(body.aiProvider), "Choose Anthropic or OpenAI.");
+  const provider = body.aiProvider ?? getAiProvider();
+  if (body.aiModel !== undefined)
+    requireValue(
+      typeof body.aiModel === "string" &&
+        /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,199}$/.test(body.aiModel.trim()),
+      "Enter a valid model ID.",
+    );
+  for (const id of AI_PROVIDERS) {
+    const key = body[`${id}Key`];
+    if (key === undefined) continue;
+    requireValue(
+      key === null ||
+        (typeof key === "string" &&
+          key.trim().length > 0 &&
+          key.length <= 4096 &&
+          !/\s/.test(key.trim())),
+      `Enter a valid ${AI_PROVIDER_NAMES[id]} API key.`,
+    );
+    requireValue(
+      !aiKeyEnvironment(id),
+      `${AI_PROVIDER_NAMES[id]} uses an environment key. Update or remove it on the server.`,
+    );
+  }
   if (body.timeZone !== undefined) {
     let valid = false;
     try {
@@ -52,7 +83,13 @@ export const PATCH = handler(async (request: Request) => {
       for (const account of db.select({ id: accounts.id }).from(accounts).all())
         rebuildAccount(account.id);
     });
-  if (body.anthropicKey !== undefined) setAnthropicKey(body.anthropicKey);
-  if (body.aiModel !== undefined) setSetting("aiModel", body.aiModel);
+  db.transaction(() => {
+    for (const id of AI_PROVIDERS) {
+      const key = body[`${id}Key`];
+      if (key !== undefined) setAiKey(id, key);
+    }
+    if (body.aiProvider !== undefined) setSetting("aiProvider", body.aiProvider);
+    if (body.aiModel !== undefined) setSetting(aiModelSetting(provider), body.aiModel.trim());
+  });
   return ok({ saved: true });
 });
