@@ -1,9 +1,10 @@
 "use client";
-import { MonetaryField } from "@/components/privacy";
 
-import { Suspense, useId, useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileUp, Landmark, PencilLine } from "lucide-react";
+import { AccountPicker } from "@/components/account-picker";
+import { ManualTradeEntry } from "@/components/manual-trade-entry";
 import { FilterBar } from "@/components/filter-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,6 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { postJson, useApi } from "@/lib/use-api";
-import { fmtNumber } from "@/lib/utils";
 import { decodeImportFile } from "@/lib/decode-import";
 
 interface BrokerInfo {
@@ -27,13 +27,6 @@ interface BrokerInfo {
   displayName: string;
   credentials: { key: string; label: string; secret?: boolean }[];
   readOnlySetup: string;
-}
-
-interface AccountRow {
-  id: string;
-  name: string;
-  kind: string;
-  archivedAt: string | null;
 }
 
 interface PreviewTotals {
@@ -70,6 +63,7 @@ export default function ImportPage() {
 }
 
 function ImportView() {
+  const router = useRouter();
   return (
     <div>
       <FilterBar title="Import trades" />
@@ -96,180 +90,17 @@ function ImportView() {
             <BrokerConnect />
           </TabsContent>
           <TabsContent value="manual">
-            <ManualEntry />
+            <Card>
+              <CardHeader>
+                <CardTitle>Add executions manually</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ManualTradeEntry onSaved={() => router.push("/trades")} />
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
-    </div>
-  );
-}
-
-/** Account picker used by every method; offers creating a new one inline. */
-function AccountPicker({
-  value,
-  onChange,
-  kind,
-}: {
-  value: string;
-  onChange: (id: string) => void;
-  kind: "import" | "manual";
-}) {
-  const {
-    data,
-    refresh,
-    error: accountError,
-  } = useApi<{ accounts: AccountRow[] }>("/api/accounts");
-  const [creating, setCreating] = useState(false);
-  const [name, setName] = useState("");
-  const [currency, setCurrency] = useState("USD");
-  const [balance, setBalance] = useState("0");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [created, setCreated] = useState<AccountRow[]>([]);
-  const fieldId = useId();
-  const accounts = [
-    ...(data?.accounts ?? []),
-    ...created.filter((item) => !data?.accounts.some((row) => row.id === item.id)),
-  ].filter((account) => !account.archivedAt);
-  const create = async () => {
-    if (
-      saving ||
-      !name.trim() ||
-      !/^[A-Z]{3}$/.test(currency) ||
-      !balance.trim() ||
-      !Number.isFinite(Number(balance)) ||
-      Number(balance) < 0
-    )
-      return;
-    setSaving(true);
-    setError("");
-    try {
-      const result = await postJson<{ id: string }>("/api/accounts", {
-        name: name.trim(),
-        kind,
-        currency,
-        initialBalance: Number(balance),
-      });
-      setCreated((current) => [
-        ...current,
-        { id: result.id, name: name.trim(), kind, archivedAt: null },
-      ]);
-      onChange(result.id);
-      refresh();
-      setCreating(false);
-      setName("");
-      setBalance("0");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Account creation failed.");
-    } finally {
-      setSaving(false);
-    }
-  };
-  return (
-    <div className="flex min-w-0 flex-wrap items-end gap-2">
-      <div className="min-w-0 flex-[1_1_180px]">
-        <Label htmlFor={`${fieldId}-account`} className="mb-1 block text-xs text-muted-foreground">
-          Into account
-        </Label>
-        <Select value={value} onValueChange={onChange}>
-          <SelectTrigger id={`${fieldId}-account`}>
-            <SelectValue placeholder="Choose an account" />
-          </SelectTrigger>
-          <SelectContent>
-            {accounts.map((account) => (
-              <SelectItem key={account.id} value={account.id}>
-                {account.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <Button
-        type="button"
-        variant="outline"
-        aria-expanded={creating}
-        onClick={() => {
-          setCreating(!creating);
-          setError("");
-        }}
-        disabled={saving}
-      >
-        {creating ? "Cancel new account" : "New account"}
-      </Button>
-      {accountError && (
-        <p role="alert" className="w-full text-sm text-destructive">
-          {accountError}
-        </p>
-      )}
-      {creating && (
-        <form
-          className="w-full space-y-3 rounded-lg border p-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!saving) void create();
-          }}
-        >
-          <h3 className="text-sm font-medium">Create account</h3>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldId}-name`}>Account name</Label>
-              <Input
-                id={`${fieldId}-name`}
-                autoFocus
-                required
-                maxLength={120}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                disabled={saving}
-                placeholder="Trading test account"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldId}-currency`}>Currency</Label>
-              <Input
-                id={`${fieldId}-currency`}
-                required
-                pattern="[A-Z]{3}"
-                maxLength={3}
-                value={currency}
-                onChange={(event) => setCurrency(event.target.value.toUpperCase())}
-                disabled={saving}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldId}-balance`}>Starting balance</Label>
-              <Input
-                id={`${fieldId}-balance`}
-                required
-                type="number"
-                min="0"
-                step="0.01"
-                value={balance}
-                onChange={(event) => setBalance(event.target.value)}
-                disabled={saving}
-              />
-            </div>
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <Button
-            type="submit"
-            disabled={
-              saving ||
-              !name.trim() ||
-              !/^[A-Z]{3}$/.test(currency) ||
-              !balance.trim() ||
-              !Number.isFinite(Number(balance)) ||
-              Number(balance) < 0
-            }
-          >
-            {saving ? "Creating…" : "Create account"}
-          </Button>
-        </form>
-      )}
     </div>
   );
 }
@@ -622,160 +453,6 @@ function BrokerConnect() {
             </Button>
           </>
         )}
-      </CardContent>
-    </Card>
-  );
-}
-
-interface ManualLeg {
-  datetime: string;
-  side: "buy" | "sell";
-  quantity: string;
-  price: string;
-  fee: string;
-}
-
-function ManualEntry() {
-  const router = useRouter();
-  const [accountId, setAccountId] = useState("");
-  const [symbol, setSymbol] = useState("");
-  const [legs, setLegs] = useState<ManualLeg[]>([
-    { datetime: "", side: "buy", quantity: "", price: "", fee: "" },
-    { datetime: "", side: "sell", quantity: "", price: "", fee: "" },
-  ]);
-  const [busy, setBusy] = useState(false);
-
-  const setLeg = (index: number, patch: Partial<ManualLeg>) =>
-    setLegs((current) => current.map((leg, i) => (i === index ? { ...leg, ...patch } : leg)));
-
-  const valid =
-    accountId &&
-    symbol &&
-    legs.some((leg) => leg.datetime && Number(leg.quantity) > 0 && leg.price !== "");
-
-  const save = async () => {
-    setBusy(true);
-    try {
-      await postJson("/api/executions", {
-        accountId,
-        executions: legs
-          .filter((leg) => leg.datetime && Number(leg.quantity) > 0 && leg.price !== "")
-          .map((leg) => ({
-            symbol,
-            side: leg.side,
-            quantity: Number(leg.quantity),
-            price: Number(leg.price),
-            fee: leg.fee === "" ? 0 : Number(leg.fee),
-            executedAt: new Date(leg.datetime).toISOString(),
-          })),
-      });
-      router.push("/trades");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Add executions manually</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <AccountPicker value={accountId} onChange={setAccountId} kind="manual" />
-        <div>
-          <Label className="mb-1 block text-xs text-muted-foreground">Symbol</Label>
-          <Input
-            value={symbol}
-            onChange={(event) => setSymbol(event.target.value.toUpperCase())}
-            placeholder="AAPL, ESZ6, BTCUSDT…"
-          />
-        </div>
-        <div className="manual-executions space-y-3">
-          {legs.map((leg, index) => (
-            <fieldset
-              key={index}
-              className="manual-execution-row grid min-w-0 gap-2 rounded-lg border p-3"
-            >
-              <legend className="px-1 text-xs text-muted-foreground">Execution {index + 1}</legend>
-              <label className="manual-execution-date grid min-w-0 gap-1 text-xs text-muted-foreground">
-                Date & time
-                <Input
-                  type="datetime-local"
-                  value={leg.datetime}
-                  onChange={(event) => setLeg(index, { datetime: event.target.value })}
-                />
-              </label>
-              <div className="grid min-w-0 gap-1 text-xs text-muted-foreground">
-                <span id={`execution-side-${index}`}>Side</span>
-                <Select
-                  value={leg.side}
-                  onValueChange={(value) => setLeg(index, { side: value as "buy" | "sell" })}
-                >
-                  <SelectTrigger aria-labelledby={`execution-side-${index}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="buy">Buy</SelectItem>
-                    <SelectItem value="sell">Sell</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">
-                Quantity
-                <Input
-                  placeholder="qty"
-                  inputMode="decimal"
-                  value={leg.quantity}
-                  onChange={(event) => setLeg(index, { quantity: event.target.value })}
-                />
-              </label>
-              <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">
-                Price
-                <MonetaryField>
-                  <Input
-                    placeholder="price"
-                    inputMode="decimal"
-                    value={leg.price}
-                    onChange={(event) => setLeg(index, { price: event.target.value })}
-                  />
-                </MonetaryField>
-              </label>
-              <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">
-                Fee
-                <MonetaryField>
-                  <Input
-                    placeholder="fee"
-                    inputMode="decimal"
-                    value={leg.fee}
-                    onChange={(event) => setLeg(index, { fee: event.target.value })}
-                  />
-                </MonetaryField>
-              </label>
-            </fieldset>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setLegs((current) => [
-                ...current,
-                { datetime: "", side: "sell", quantity: "", price: "", fee: "" },
-              ])
-            }
-          >
-            Add execution
-          </Button>
-          <Button size="sm" onClick={save} disabled={!valid || busy}>
-            {busy ? "Saving…" : "Save trade"}
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Executions matching an open position on {symbol || "the symbol"} are stitched into round
-          trips automatically ({fmtNumber(legs.filter((leg) => leg.datetime).length, 0)} legs so
-          far).
-        </p>
       </CardContent>
     </Card>
   );

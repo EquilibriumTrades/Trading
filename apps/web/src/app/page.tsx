@@ -30,6 +30,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { FilterBar, useFilters } from "@/components/filter-bar";
+import { AddTradeDialog } from "@/components/add-trade-dialog";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { MonetaryValue } from "@/components/privacy";
 import { Pnl } from "@/components/pnl";
@@ -79,11 +80,37 @@ function Dashboard() {
   const { query } = useFilters();
   const { data, loading, error, refresh } = useApi<StatsPayload>(`/api/stats?${query}`);
 
+  return (
+    <>
+      <FilterBar title="Dashboard" actions={<AddTradeDialog onSaved={refresh} />} />
+      <DashboardContent
+        data={data}
+        loading={loading}
+        error={error}
+        refresh={refresh}
+        query={query}
+      />
+    </>
+  );
+}
+
+function DashboardContent({
+  data,
+  loading,
+  error,
+  refresh,
+  query,
+}: {
+  data: StatsPayload | null;
+  loading: boolean;
+  error: string | null;
+  refresh: () => void;
+  query: string;
+}) {
   if (loading && !data) return <DashboardSkeleton />;
   if (!data)
     return (
       <div>
-        <FilterBar title="Dashboard" />
         <div className="space-y-3 p-4">
           <p role="alert" className="text-sm text-destructive">
             {error ?? "Could not load the dashboard."}
@@ -103,7 +130,6 @@ function Dashboard() {
   if (m.totalTrades === 0)
     return query ? (
       <div>
-        <FilterBar title="Dashboard" />
         <p className="p-12 text-center text-sm text-muted-foreground">
           No trades match these filters. Clear or adjust Filters to see more results.
         </p>
@@ -141,7 +167,6 @@ function Dashboard() {
 
   return (
     <>
-      <FilterBar title="Dashboard" />
       <DashboardLayout
         widgets={[
           {
@@ -705,7 +730,6 @@ function EmptyState() {
   };
   return (
     <div>
-      <FilterBar title="Dashboard" />
       <div className="flex flex-col items-center justify-center gap-3 px-4 py-24 text-center">
         <h2 className="text-xl font-semibold">Your journal is empty</h2>
         <p className="max-w-md text-sm text-muted-foreground">
@@ -738,7 +762,6 @@ function EmptyState() {
 function DashboardSkeleton() {
   return (
     <div>
-      <FilterBar title="Dashboard" />
       <div className="dashboard-grid-stage space-y-3 p-4">
         <div className="dashboard-grid grid gap-3">
           {Array.from({ length: 5 }).map((_, i) => (

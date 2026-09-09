@@ -1,15 +1,20 @@
 import type { ImportedExecution } from "@luxalgo/journal-importers";
-import { bad, handler, ok } from "@/server/api";
+import { bad, handler, ok, requireValue } from "@/server/api";
 import { insertExecutions } from "@/server/executions";
 
 interface ManualBody {
   accountId: string;
   executions: ImportedExecution[];
+  notes?: string;
 }
 
 /** Manual trade entry: the client sends raw fills (entry legs + exit legs). */
 export const POST = handler(async (request: Request) => {
   const body = (await request.json()) as ManualBody;
+  requireValue(
+    body?.notes === undefined || (typeof body.notes === "string" && body.notes.length <= 100000),
+    "Notes must be at most 100,000 characters.",
+  );
   if (!body.accountId || !Array.isArray(body.executions) || body.executions.length === 0) {
     return bad("accountId and a non-empty executions array are required");
   }
@@ -34,5 +39,5 @@ export const POST = handler(async (request: Request) => {
     symbol: row.symbol.trim().toUpperCase(),
     fee: row.fee ?? 0,
   }));
-  return ok(insertExecutions(body.accountId, rows, "manual"));
+  return ok(insertExecutions(body.accountId, rows, "manual", body.notes));
 });

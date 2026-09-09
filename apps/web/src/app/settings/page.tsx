@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { JournalDefaultSettings } from "@/components/journal-default-settings";
 import { MarketDataSettings } from "@/components/market-data-settings";
+import { AiSettings } from "@/components/ai-settings";
 import { Download } from "lucide-react";
 import { FilterBar } from "@/components/filter-bar";
 import { Button } from "@/components/ui/button";
@@ -14,8 +15,6 @@ import { postJson, useApi } from "@/lib/use-api";
 interface SettingsPayload {
   timeZone: string;
   multipliers: Record<string, number>;
-  aiConfigured: boolean;
-  aiModel: string;
 }
 
 export default function SettingsPage() {
@@ -30,7 +29,6 @@ function Settings() {
   const { data, refresh } = useApi<SettingsPayload>("/api/settings");
   const [timeZone, setTimeZone] = useState("");
   const [multipliers, setMultipliers] = useState("");
-  const [apiKey, setApiKey] = useState("");
   const [saved, setSaved] = useState(false);
   const [failure, setFailure] = useState("");
 
@@ -116,51 +114,7 @@ function Settings() {
           </CardContent>
         </Card>
 
-        <Card id="ai-settings" className="scroll-mt-24">
-          <CardHeader>
-            <CardTitle>AI (bring your own key)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Recaps, trade critiques, and “ask your journal” run against YOUR Anthropic API key,
-              from YOUR machine. The key is encrypted at rest next to your data and never leaves
-              this server except to call the model. Status:{" "}
-              <span className={data?.aiConfigured ? "text-profit" : "text-muted-foreground"}>
-                {data?.aiConfigured ? "configured" : "not configured"}
-              </span>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Input
-                type="password"
-                value={apiKey}
-                onChange={(event) => setApiKey(event.target.value)}
-                placeholder="sk-ant-…"
-                autoComplete="off"
-              />
-              <Button
-                disabled={!apiKey}
-                onClick={async () => {
-                  await postJson("/api/settings", { anthropicKey: apiKey }, "PATCH");
-                  setApiKey("");
-                  refresh();
-                }}
-              >
-                Save key
-              </Button>
-              {data?.aiConfigured && (
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    await postJson("/api/settings", { anthropicKey: null }, "PATCH");
-                    refresh();
-                  }}
-                >
-                  Remove
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <AiSettings />
 
         <Card>
           <CardHeader>

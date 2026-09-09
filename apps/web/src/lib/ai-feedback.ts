@@ -12,22 +12,39 @@ export function aiFeedback(message: string): AiFeedback {
     return {
       title: "Set up AI to continue",
       description:
-        "Connect your Anthropic API key in Settings to ask questions, generate recaps, and review trades.",
+        "Connect an Anthropic or OpenAI API key in Settings to ask questions, generate recaps, and review trades.",
       tone: "info",
       action: { label: "Set up AI", href: "/settings#ai-settings" },
     };
-  if (/invalid.*(?:api.?key|x-api-key)|authentication_error|invalid x-api-key/i.test(message))
+  if (
+    /invalid.*(?:api.?key|x-api-key)|incorrect api key|authentication_error|invalid_api_key/i.test(
+      message,
+    )
+  )
     return {
       title: "Check your AI connection",
-      description: "Anthropic couldn’t verify your API key. Update it in Settings, then try again.",
+      description:
+        "Your AI provider couldn’t verify your key or permissions. Review them in Settings, then try again.",
       tone: "error",
       action: { label: "Review AI settings", href: "/settings#ai-settings" },
     };
-  if (/credit balance|billing|insufficient.*credit/i.test(message))
+  if (
+    /credit balance|billing|insufficient.*(?:credit|quota)|exceeded your current quota/i.test(
+      message,
+    )
+  )
     return {
       title: "Your AI account needs attention",
-      description: "Check the billing or credit balance on your Anthropic account, then try again.",
+      description:
+        "Check the billing, credit balance, or quota on your AI provider account, then try again.",
       tone: "info",
+    };
+  if (/model unavailable|model_not_found/i.test(message))
+    return {
+      title: "Check your AI model",
+      description: "Check the model ID and your provider account’s access in Settings.",
+      tone: "error",
+      action: { label: "Review AI settings", href: "/settings#ai-settings" },
     };
   if (/rate.limit|too many requests|overloaded/i.test(message))
     return {
