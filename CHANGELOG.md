@@ -16,9 +16,14 @@ All notable changes to this project are documented here. The format follows [Kee
 - Configurable breakeven tolerance, default fees, and default stop/target distances per account and symbol
 - Importers: MetaTrader 5 deal reports and TradingView strategy exports
 - Realized R accounts for contract multipliers and scaled entries
+- Optional historical market data connections (London Strategic Edge, Alpaca, OANDA, Binance, Coinbase, or your own candle CSV) with estimated MAE/MFE and candle replay on closed trades
+- Prop firm tracker: evaluation and reset costs, refunds, payout requests, receipts, cash ROI, renewals, attachments, CSV import and export
+- Calendar insights, rolling performance trends, and a trade explorer scatter in Reports
+- Light mode, a collapsible sidebar, and friendlier AI setup and error notices
 
 ### Changed
 
+- Trade pages chart recorded fills only and never contact a data provider on open; market candles load only from a data source you choose
 - Gross profit and gross loss now include every closed trade, so trades labeled breakeven by a tolerance still count; the Edge Score version is bumped to 2
 - Reports and dashboard aggregation reuse daily totals and equity for large histories; charts load only the components they use
 - Executions are validated and written together with their recomputed trades in one transaction

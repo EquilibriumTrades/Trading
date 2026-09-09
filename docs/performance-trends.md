@@ -12,8 +12,8 @@ Source: filtered journal round trips, closed trades only, in closing-timestamp o
 - Reference: the same measure across all closed trades in the active selection; not a target or a previous-period comparison.
 - Largest winner and loser: maximum net P&L among classified wins and minimum among classified losses. Earliest closed trade wins ties. Missing side is unavailable, not zero. Detail links open the actual trade.
 
-Native application Recharts line charts use a single product blue and a dashed neutral selected-period reference. Win rate uses 0–100%; net P&L includes zero. Signed P&L labels retain existing journal green/red semantics. Both plots have exact-value, keyboard-accessible table equivalents. No new rendering dependency.
+Native application Recharts line charts use a single product blue and a dashed neutral selected-period reference. Win rate uses 0 to 100%; net P&L includes zero. Signed P&L labels retain existing journal green/red semantics. Both plots have exact-value, keyboard-accessible table equivalents. No new rendering dependency.
 
-Sparse fallback: under 20 trades shows progress toward a full window; 20–26 trades shows the latest full-window values without an underpowered line chart. At least 8 complete windows (27 trades) enables lines. Empty results have no fabricated values. Mixed currencies retain win rate but hide monetary comparisons without FX conversion. Monetary values honor privacy mode.
+Sparse fallback: under 20 trades shows progress toward a full window; 20 to 26 trades shows the latest full-window values without an underpowered line chart. At least 8 complete windows (27 trades) enables lines. Empty results have no fabricated values. Mixed currencies retain win rate but hide monetary comparisons without FX conversion. Monetary values honor privacy mode.
 
 The report and chart code are lazy-loaded. Shared chart entrance behavior respects reduced motion. Responsive cards stack on small viewports; exact-value rows scroll within their own container. Loading and request failure/retry states use existing application primitives.

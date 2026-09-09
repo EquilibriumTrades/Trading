@@ -70,6 +70,13 @@ selections beyond the defaults.
   price-implied gross meaningless)
 - Content-hash dedup on insert: re-importing the same file is a no-op
 
+## Sample file
+
+[`docs/samples/demo-trades-tradingview.csv`](samples/demo-trades-tradingview.csv) is a
+synthetic TradingView paper-trading export: 13 symbols, about 2,000 fills, March 2025
+through September 2026. Drop it on **Import → File upload** to try the importer end to
+end. It is generated data, not a real account.
+
 ## Adding a format
 
 1. Add a spec to `packages/importers/src/formats/`; most CSVs are a declarative

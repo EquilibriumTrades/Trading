@@ -155,6 +155,9 @@
   background-clip: text;
   color: transparent;
 }
+.prism-bar {
+  background-image: linear-gradient(180deg, var(--prism-from), var(--prism-to));
+}
 
 /* Hairline top sheen that lifts cards off a near-black canvas. */
 .card-sheen {

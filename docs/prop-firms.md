@@ -81,7 +81,7 @@ Download **Data tools → Import CSV → header template** from the page (`/prop
 id,kind,firm,account_id,currency,date,amount,category,expense_id,reference,notes
 ```
 
-- `id`: a stable unique transaction ID, 1–100 letters, digits, underscores or hyphens. Retain it when re-importing. IDs must be unique across imports, so prefix IDs from different files/systems when needed.
+- `id`: a stable unique transaction ID, 1 to 100 letters, digits, underscores or hyphens. Retain it when re-importing. IDs must be unique across imports, so prefix IDs from different files/systems when needed.
 - `kind`: `expense`, `refund` or `payout`. A CSV payout means **actual net money already received**, not a pending request. It creates a completed payout and matching receipt at 100% share and zero additional fee.
 - `firm`: your own firm name; for an account-linked row it must match that account exactly.
 - `account_id`: copy from account Details. Required for payouts. Expenses can leave it blank for shared firm costs; refunds must match the original expense's account.
