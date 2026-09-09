@@ -12,6 +12,9 @@ import {
   type TradeYAxis,
 } from "@/lib/trade-explorer";
 import { useApi } from "@/lib/use-api";
+import { ReportMarketEstimates } from "./report-market-estimates";
+import { MonetaryValue } from "./privacy";
+import { fmtMoney } from "@/lib/utils";
 import { Pnl } from "./pnl";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
@@ -50,7 +53,7 @@ export function TradeExplorer({ query }: { query: string }) {
       }),
     [data?.timeZone],
   );
-  if (loading)
+  if (loading && !data)
     return (
       <div role="status" aria-label="Loading trade explorer">
         <Skeleton className="h-96" />
@@ -66,11 +69,24 @@ export function TradeExplorer({ query }: { query: string }) {
       </div>
     );
   const currency = data.currencies[0] ?? "USD";
-  const blocked = y === "netPnl" && data.currencies.length > 1;
-  const xTitle = x === "durationMinutes" ? "Duration (minutes)" : `Entry time (${data.timeZone})`;
-  const yTitle = y === "netPnl" ? `Net P&L (${currency})` : "Realized R";
+  const excursion = x === "mae" || x === "mfe" || y === "mae" || y === "mfe";
+  const blocked = (y !== "realizedR" || excursion) && data.currencies.length > 1;
+  const xTitle =
+    x === "durationMinutes"
+      ? "Duration (minutes)"
+      : x === "entryMinute"
+        ? `Entry time (${data.timeZone})`
+        : `Estimated ${x.toUpperCase()} (${currency})`;
+  const yTitle =
+    y === "netPnl"
+      ? `Net P&L (${currency})`
+      : y === "realizedR"
+        ? "Realized R"
+        : `Estimated ${y.toUpperCase()} (${currency})`;
   const value = (point: PlottedTrade) =>
-    y === "netPnl" ? (
+    y === "mae" || y === "mfe" ? (
+      <MonetaryValue>{fmtMoney(point.y, currency)}</MonetaryValue>
+    ) : y === "netPnl" ? (
       <Pnl value={point.y} currency={currency} />
     ) : (
       <span className="tabular-nums">
@@ -79,9 +95,13 @@ export function TradeExplorer({ query }: { query: string }) {
       </span>
     );
   const xValue = (point: PlottedTrade) =>
-    x === "entryMinute"
-      ? clockLabel(point.x)
-      : `${point.x.toLocaleString(undefined, { maximumFractionDigits: 2 })} min`;
+    x === "mae" || x === "mfe" ? (
+      <MonetaryValue>{fmtMoney(point.x, currency)}</MonetaryValue>
+    ) : x === "entryMinute" ? (
+      clockLabel(point.x)
+    ) : (
+      `${point.x.toLocaleString(undefined, { maximumFractionDigits: 2 })} min`
+    );
   const pages = Math.ceil(points.length / PAGE_SIZE);
   const shownPage = Math.min(page, Math.max(0, pages - 1));
   const table = (
@@ -164,18 +184,50 @@ export function TradeExplorer({ query }: { query: string }) {
           {data.timeZone}
         </p>
       </div>
+      <ReportMarketEstimates
+        points={data.points}
+        currencies={data.currencies}
+        onComplete={refresh}
+      />
+      <div className="flex flex-wrap gap-2" aria-label="Scatter plot presets">
+        {(
+          [
+            ["durationMinutes", "netPnl", "Holding time"],
+            ["mae", "netPnl", "MAE vs net P&L"],
+            ["mfe", "netPnl", "MFE vs net P&L"],
+            ["mae", "mfe", "MAE vs MFE"],
+          ] as const
+        ).map(([nextX, nextY, label]) => (
+          <Button
+            key={label}
+            size="sm"
+            variant={x === nextX && y === nextY ? "secondary" : "outline"}
+            onClick={() => {
+              setX(nextX);
+              setY(nextY);
+              setSelected(null);
+              setPage(0);
+            }}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
       <Card className="min-w-0 overflow-hidden">
         <CardHeader>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <CardTitle>
-                Trade outcomes by {x === "durationMinutes" ? "holding time" : "entry time"}
+                {excursion
+                  ? `${xTitle} vs ${yTitle}`
+                  : `Trade outcomes by ${x === "durationMinutes" ? "holding time" : "entry time"}`}
               </CardTitle>
               <p className="mt-2 text-xs text-muted-foreground">
                 {blocked
                   ? `${data.points.length} closed trades`
                   : `${points.length} of ${data.points.length} closed trades comparable`}{" "}
-                · One point per trade · After fees
+                · One point per trade ·{" "}
+                {excursion ? "Gross excursion estimates; net P&L after fees" : "After fees"}
               </p>
             </div>
             <div className="flex w-full flex-wrap gap-3 sm:w-auto">
@@ -197,6 +249,8 @@ export function TradeExplorer({ query }: { query: string }) {
                 >
                   <option value="durationMinutes">Duration (minutes)</option>
                   <option value="entryMinute">Entry time</option>
+                  <option value="mae">Estimated MAE</option>
+                  <option value="mfe">Estimated MFE</option>
                 </OptionSelect>
               </div>
               <div className="min-w-0 flex-1 sm:w-44">
@@ -217,6 +271,8 @@ export function TradeExplorer({ query }: { query: string }) {
                 >
                   <option value="netPnl">Net P&L</option>
                   <option value="realizedR">Realized R</option>
+                  <option value="mae">Estimated MAE</option>
+                  <option value="mfe">Estimated MFE</option>
                 </OptionSelect>
               </div>
             </div>
@@ -234,8 +290,8 @@ export function TradeExplorer({ query }: { query: string }) {
           ) : blocked ? (
             <p role="note" className="rounded-lg bg-muted/30 p-4 text-sm text-muted-foreground">
               These trades use different currencies ({data.currencies.join(", ")}). Select accounts
-              with one currency for net P&L, or choose Realized R to compare risk-normalized
-              outcomes. No currency conversion is applied.
+              with one currency for monetary axes, or use Duration and Realized R to compare
+              risk-normalized outcomes. No currency conversion is applied.
             </p>
           ) : (
             <>
@@ -245,7 +301,8 @@ export function TradeExplorer({ query }: { query: string }) {
                   {y === "realizedR"
                     ? "realized R requires a valid planned stop-loss and any required contract multiplier; "
                     : ""}
-                  both axes require valid recorded values and timestamps.
+                  {excursion ? "MAE/MFE require saved, current market-data estimates. " : ""}Both
+                  axes require valid values and timestamps.
                 </p>
               )}
               {y === "realizedR" && (
@@ -254,7 +311,7 @@ export function TradeExplorer({ query }: { query: string }) {
                   entry quantity; it does not measure maximum intratrade risk.
                 </p>
               )}
-              {points.length >= 8 ? (
+              {points.length >= (excursion ? 1 : 8) ? (
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
                     <span>{yTitle}</span>
@@ -263,16 +320,16 @@ export function TradeExplorer({ query }: { query: string }) {
                         <span aria-hidden="true" className="text-[var(--profit)]">
                           ●
                         </span>{" "}
-                        Positive
+                        Positive net P&L
                       </span>
                       <span>
                         <span aria-hidden="true" className="text-[var(--loss)]">
                           ●
                         </span>{" "}
-                        Negative
+                        Negative net P&L
                       </span>
                       <span>
-                        <span aria-hidden="true">●</span> Zero
+                        <span aria-hidden="true">●</span> Zero net P&L
                       </span>
                     </span>
                   </div>
@@ -322,7 +379,7 @@ export function TradeExplorer({ query }: { query: string }) {
                     : "Fewer than 8 comparable trades. Review the exact values below, or widen your filters to reveal a useful scatter plot."}
                 </p>
               )}
-              {points.length >= 8 && points.length < 20 && (
+              {points.length > 0 && points.length < 20 && (
                 <p className="text-xs text-muted-foreground">
                   Small sample: treat apparent patterns cautiously until more trades are available.
                 </p>

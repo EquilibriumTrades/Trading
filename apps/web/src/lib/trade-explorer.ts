@@ -1,7 +1,7 @@
 import { clockTime, tradeR, type AnnotatedTrade } from "@luxalgo/journal-core";
 
-export type TradeXAxis = "durationMinutes" | "entryMinute";
-export type TradeYAxis = "netPnl" | "realizedR";
+export type TradeXAxis = "durationMinutes" | "entryMinute" | "mae" | "mfe";
+export type TradeYAxis = "netPnl" | "realizedR" | "mae" | "mfe";
 export interface TradePoint {
   key: string;
   symbol: string;
@@ -11,6 +11,8 @@ export interface TradePoint {
   entryMinute: number | null;
   netPnl: number | null;
   realizedR: number | null;
+  mae: number | null;
+  mfe: number | null;
 }
 export interface TradeExplorerResponse {
   points: TradePoint[];
@@ -39,6 +41,8 @@ export function tradeExplorerPoints(trades: AnnotatedTrade[], timeZone: string):
         entryMinute: clock ? finite(clock[0]! * 60 + clock[1]!) : null,
         netPnl: finite(trade.netPnl),
         realizedR: finite(tradeR(trade)),
+        mae: null,
+        mfe: null,
       };
     })
     .sort((a, b) => Date.parse(b.closedAt) - Date.parse(a.closedAt) || a.key.localeCompare(b.key));
@@ -46,7 +50,11 @@ export function tradeExplorerPoints(trades: AnnotatedTrade[], timeZone: string):
 
 export function plotTradePoints(points: TradePoint[], x: TradeXAxis, y: TradeYAxis) {
   return points.flatMap((point) =>
-    point[x] === null || point[y] === null || !Number.isFinite(Date.parse(point.closedAt))
+    point[x] == null ||
+    point[y] == null ||
+    !Number.isFinite(point[x]) ||
+    !Number.isFinite(point[y]) ||
+    !Number.isFinite(Date.parse(point.closedAt))
       ? []
       : [{ ...point, x: point[x]!, y: point[y]! }],
   );

@@ -6,6 +6,7 @@ import {
   sqliteTable,
   text,
   uniqueIndex,
+  type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 
 /** One journal account = one broker/platform's trades (TradeZella's model, kept). */
@@ -195,3 +196,113 @@ export const missedTrades = sqliteTable("missed_trades", {
   createdAt: text("created_at").notNull(),
   archivedAt: text("archived_at"),
 });
+
+/** Derived market-data estimates; journal fills remain authoritative. */
+export const tradeExcursions = sqliteTable("trade_excursions", {
+  tradeKey: text("trade_key")
+    .primaryKey()
+    .references(() => trades.key, { onDelete: "cascade" }),
+  fingerprint: text("fingerprint").notNull(),
+  provider: text("provider").notNull(),
+  symbol: text("symbol").notNull(),
+  resolution: text("resolution").notNull(),
+  fetchedAt: text("fetched_at").notNull(),
+  estimateJson: text("estimate_json").notNull(),
+});
+
+/** User-supplied market candles, separate from execution imports and journal exports. */
+export const marketCsvDatasets = sqliteTable("market_csv_datasets", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  symbol: text("symbol").notNull(),
+  resolution: text("resolution").notNull(),
+  currency: text("currency").notNull(),
+  priceBasis: text("price_basis").notNull(),
+  barsJson: text("bars_json").notNull(),
+  barCount: integer("bar_count").notNull(),
+  firstTime: integer("first_time").notNull(),
+  lastTime: integer("last_time").notNull(),
+  importedAt: text("imported_at").notNull(),
+});
+
+/** User-maintained prop account attempts and actual cash flows, never journal P&L. */
+export const propAccounts = sqliteTable("prop_accounts", {
+  id: text("id").primaryKey(),
+  firm: text("firm").notNull(),
+  name: text("name").notNull(),
+  program: text("program").notNull(),
+  status: text("status").notNull(),
+  currency: text("currency").notNull(),
+  sizeMinor: integer("size_minor"),
+  parentId: text("parent_id").references((): AnySQLiteColumn => propAccounts.id),
+  journalAccountId: text("journal_account_id").references(() => accounts.id, {
+    onDelete: "set null",
+  }),
+  openedOn: text("opened_on").notNull(),
+  closedOn: text("closed_on"),
+  renewalOn: text("renewal_on"),
+  renewalMinor: integer("renewal_minor"),
+  notes: text("notes").notNull().default(""),
+  archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+  revision: integer("revision").notNull().default(1),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+export const propEntries = sqliteTable(
+  "prop_entries",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id").references(() => propAccounts.id),
+    firm: text("firm").notNull(),
+    kind: text("kind").notNull(),
+    category: text("category").notNull(),
+    currency: text("currency").notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    splitBps: integer("split_bps").notNull(),
+    feeMinor: integer("fee_minor").notNull(),
+    occurredOn: text("occurred_on").notNull(),
+    dueOn: text("due_on"),
+    status: text("status").notNull(),
+    parentId: text("parent_id").references((): AnySQLiteColumn => propEntries.id),
+    reference: text("reference").notNull().default(""),
+    notes: text("notes").notNull().default(""),
+    voided: integer("voided", { mode: "boolean" }).notNull().default(false),
+    revision: integer("revision").notNull().default(1),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("prop_entries_account_date").on(table.accountId, table.occurredOn),
+    index("prop_entries_date").on(table.occurredOn),
+  ],
+);
+export const propReceipts = sqliteTable(
+  "prop_receipts",
+  {
+    id: text("id").primaryKey(),
+    payoutId: text("payout_id")
+      .notNull()
+      .references(() => propEntries.id),
+    kind: text("kind").notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    occurredOn: text("occurred_on").notNull(),
+    reference: text("reference").notNull().default(""),
+    notes: text("notes").notNull().default(""),
+    voided: integer("voided", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [index("prop_receipts_payout").on(table.payoutId)],
+);
+export const propAudit = sqliteTable(
+  "prop_audit",
+  {
+    id: text("id").primaryKey(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id").notNull(),
+    beforeJson: text("before_json"),
+    afterJson: text("after_json").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [index("prop_audit_entity").on(table.entityType, table.entityId)],
+);

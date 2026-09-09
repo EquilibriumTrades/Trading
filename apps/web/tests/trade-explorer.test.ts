@@ -39,6 +39,15 @@ describe("trade explorer", () => {
     });
     expect(plotTradePoints(rows, "durationMinutes", "netPnl")[0]).toMatchObject({ x: 30.5, y: 96 });
   });
+  it("plots excursion axes without treating missing estimates as zero or MAE as a loss outcome", () => {
+    const rows = tradeExplorerPoints([trade(), trade({ key: "missing" })], "UTC");
+    rows[0]!.mae = 0;
+    rows[0]!.mfe = 140;
+    expect(plotTradePoints(rows, "mae", "mfe")).toMatchObject([{ x: 0, y: 140, netPnl: 96 }]);
+    expect(plotTradePoints(rows, "mfe", "netPnl")).toMatchObject([{ x: 140, y: 96 }]);
+    rows[0]!.mae = Infinity;
+    expect(plotTradePoints(rows, "mae", "mfe")).toEqual([]);
+  });
   it("uses local entry time while elapsed duration remains timezone independent", () => {
     expect(tradeExplorerPoints([trade()], "America/New_York")[0]).toMatchObject({
       durationMinutes: 30.5,

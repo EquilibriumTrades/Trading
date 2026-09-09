@@ -42,9 +42,9 @@ export function TradeScatter({
   const privateMode = usePrivacy();
   const groups = useMemo(
     () => [
-      points.filter((p) => p.y > 0),
-      points.filter((p) => p.y < 0),
-      points.filter((p) => p.y === 0),
+      points.filter((p) => (p.netPnl ?? 0) > 0),
+      points.filter((p) => (p.netPnl ?? 0) < 0),
+      points.filter((p) => (p.netPnl ?? 0) === 0),
     ],
     [points],
   );
@@ -54,6 +54,14 @@ export function TradeScatter({
   );
   const yLabel = (n: number) =>
     y === "realizedR" ? `${n.toFixed(2)}R` : privateMode ? "••••" : fmtMoney(n, currency);
+  const xLabel = (n: number) =>
+    x === "entryMinute"
+      ? clockLabel(n)
+      : x === "mae" || x === "mfe"
+        ? privateMode
+          ? "••••"
+          : fmtMoney(n, currency)
+        : n.toLocaleString(undefined, { maximumFractionDigits: 1, notation: "compact" });
   if (!tokens) return <div className="h-80" />;
   return (
     <ChartFrame height={340}>
@@ -69,11 +77,7 @@ export function TradeScatter({
             domain={x === "entryMinute" ? [0, 1440] : [0, "auto"]}
             ticks={x === "entryMinute" ? [0, 360, 720, 1080, 1440] : undefined}
             minTickGap={24}
-            tickFormatter={(n: number) =>
-              x === "entryMinute"
-                ? clockLabel(n)
-                : n.toLocaleString(undefined, { maximumFractionDigits: 1, notation: "compact" })
-            }
+            tickFormatter={xLabel}
             tick={{ fill: tokens.inkMuted, fontSize: 11 }}
             tickLine={false}
             axisLine={{ stroke: tokens.baseline }}
@@ -103,10 +107,17 @@ export function TradeScatter({
                   <p>
                     {x === "durationMinutes"
                       ? `${point.x.toLocaleString(undefined, { maximumFractionDigits: 2 })} minutes`
-                      : `${clockLabel(point.x)} entry`}
+                      : x === "entryMinute"
+                        ? `${clockLabel(point.x)} entry`
+                        : `Estimated ${x.toUpperCase()}: ${xLabel(point.x)}`}
                   </p>
                   <p>
-                    {y === "netPnl" ? "Net P&L" : "Realized R"}: {yLabel(point.y)}
+                    {y === "netPnl"
+                      ? "Net P&L"
+                      : y === "realizedR"
+                        ? "Realized R"
+                        : `Estimated ${y.toUpperCase()}`}
+                    : {yLabel(point.y)}
                   </p>
                   <p className="text-xs text-muted-foreground">Select to inspect this trade</p>
                 </div>

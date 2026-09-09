@@ -5,6 +5,8 @@ import { handler, ok } from "@/server/api";
 import { getTimeZone } from "@/server/settings";
 import { queryTrades } from "@/server/trades-query";
 
+import { savedEstimates } from "@/server/market-data/estimates";
+
 export const GET = handler((request: Request) => {
   const { trades } = queryTrades(readFilters(new URL(request.url).searchParams));
   const timeZone = getTimeZone();
@@ -15,8 +17,13 @@ export const GET = handler((request: Request) => {
       .all()
       .map((account) => [account.id, account.currency]),
   );
+  const estimates = savedEstimates(trades);
   return ok({
-    points: tradeExplorerPoints(trades, timeZone),
+    points: tradeExplorerPoints(trades, timeZone).map((point) => ({
+      ...point,
+      mae: estimates.get(point.key)?.estimate.mae ?? null,
+      mfe: estimates.get(point.key)?.estimate.mfe ?? null,
+    })),
     currencies: [
       ...new Set(
         trades
