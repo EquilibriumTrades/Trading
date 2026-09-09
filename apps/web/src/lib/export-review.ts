@@ -120,10 +120,7 @@ export async function exportPng(doc: ReviewDocument) {
     canvas.height = Math.max(600, 300 + chunk.length * 38);
     ctx.fillStyle = t.surface;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const gradient = ctx.createLinearGradient(0, 0, 1200, 0);
-    gradient.addColorStop(0, t.prismFrom);
-    gradient.addColorStop(1, t.prismTo);
-    ctx.fillStyle = gradient;
+    ctx.fillStyle = t.brand;
     ctx.fillRect(0, 0, 1200, 8);
     ctx.fillStyle = t.inkMuted;
     ctx.font = "22px Arial";

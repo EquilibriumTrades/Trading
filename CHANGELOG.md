@@ -23,6 +23,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- Data loads render as React transitions, so a tab change paints progressively instead of freezing while every card and chart mounts at once
+- The development server runs on Turbopack, roughly halving first-visit compile times when switching tabs in `pnpm dev`
+- Removed the gradient accent bar and gradient Edge Score number; the active nav item and the score now use the solid brand blue
 - Trade pages chart recorded fills only and never contact a data provider on open; market candles load only from a data source you choose
 - Gross profit and gross loss now include every closed trade, so trades labeled breakeven by a tolerance still count; the Edge Score version is bumped to 2
 - Reports and dashboard aggregation reuse daily totals and equity for large histories; charts load only the components they use

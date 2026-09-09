@@ -78,7 +78,6 @@ function NavLink({
             : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
         )}
       >
-        {active && <span className="prism-bar absolute left-0 h-4 w-0.5 rounded-full" />}
         <Icon className={cn("h-4 w-4", active && "text-brand")} />
         <span className="journal-sidebar-label">{label}</span>
       </Link>

@@ -1,5 +1,13 @@
 "use client";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  startTransition,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import {
   DndContext,
   DragOverlay,
@@ -105,18 +113,22 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
   useEffect(() => {
     function read() {
       captureLayout();
-      try {
-        const next = readDashboardPreferences(localStorage.getItem(DASHBOARD_LAYOUT_KEY), ids);
-        stateRef.current = next;
-        setState(next);
-        setError("");
-      } catch {
-        const next = { current: normalizeArrangement(null, ids), layouts: {} };
-        stateRef.current = next;
-        setState(next);
-        setError("Saved dashboard preferences could not be read. All cards are shown.");
-      }
-      setReady(true);
+      // Mount the cards as a transition so React can paint between them instead of
+      // blocking until every card and chart has rendered.
+      startTransition(() => {
+        try {
+          const next = readDashboardPreferences(localStorage.getItem(DASHBOARD_LAYOUT_KEY), ids);
+          stateRef.current = next;
+          setState(next);
+          setError("");
+        } catch {
+          const next = { current: normalizeArrangement(null, ids), layouts: {} };
+          stateRef.current = next;
+          setState(next);
+          setError("Saved dashboard preferences could not be read. All cards are shown.");
+        }
+        setReady(true);
+      });
     }
     read();
     const sync = (event: StorageEvent) => {

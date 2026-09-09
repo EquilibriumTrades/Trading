@@ -321,7 +321,7 @@ function Dashboard() {
                     {edgeScore.score === null ? (
                       "–"
                     ) : (
-                      <span className="prism-text">{edgeScore.score}</span>
+                      <span className="text-brand">{edgeScore.score}</span>
                     )}
                     <span className="text-xs text-muted-foreground"> /100</span>
                   </span>

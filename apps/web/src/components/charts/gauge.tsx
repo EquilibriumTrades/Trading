@@ -1,6 +1,5 @@
 "use client";
 
-import { useId } from "react";
 import { useVizTokens } from "./tokens";
 
 /**
@@ -17,7 +16,6 @@ export function Gauge({
   size?: number;
 }) {
   const t = useVizTokens();
-  const gradientId = useId();
   const radius = size / 2 - 6;
   const circumference = Math.PI * radius;
   const ratio = value === null ? 0 : Math.min(Math.max(value, 0), 1);
@@ -29,12 +27,6 @@ export function Gauge({
       aria-label={`${label}: ${value === null ? "no data" : `${(ratio * 100).toFixed(1)}%`}`}
     >
       <svg width={size} height={size / 2 + 8} viewBox={`0 0 ${size} ${size / 2 + 8}`}>
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor={t.prismFrom} />
-            <stop offset="100%" stopColor={t.prismTo} />
-          </linearGradient>
-        </defs>
         <path
           d={`M 6 ${size / 2 + 2} A ${radius} ${radius} 0 0 1 ${size - 6} ${size / 2 + 2}`}
           fill="none"
@@ -45,7 +37,7 @@ export function Gauge({
         <path
           d={`M 6 ${size / 2 + 2} A ${radius} ${radius} 0 0 1 ${size - 6} ${size / 2 + 2}`}
           fill="none"
-          stroke={`url(#${gradientId})`}
+          stroke={t.brand}
           className="journal-gauge-value"
           strokeWidth={8}
           strokeLinecap="round"

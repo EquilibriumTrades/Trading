@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useState } from "react";
 import { acquireJson } from "./api-request";
 
 export interface ApiState<T> {
@@ -33,10 +33,14 @@ export const useApi = <T>(url: string | null): ApiState<T> => {
     request.promise
       .then((body) => {
         if (cancelled) return;
-        setData(body);
-        setDataUrl(url);
-        setError(null);
-        setLoading(false);
+        // Render fresh data as a transition so React yields to the browser mid-render
+        // instead of blocking the main thread for the whole page.
+        startTransition(() => {
+          setData(body);
+          setDataUrl(url);
+          setError(null);
+          setLoading(false);
+        });
       })
       .catch((cause: unknown) => {
         if (!cancelled) {

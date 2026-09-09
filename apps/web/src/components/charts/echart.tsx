@@ -28,31 +28,38 @@ export function EChart({
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
+  const applyRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const chart = echarts.init(host);
-    chartRef.current = chart;
     let frame = 0;
-    let width = host.clientWidth,
-      height = host.clientHeight;
-    const observer = new ResizeObserver(([entry]) => {
-      if (!entry || (entry.contentRect.width === width && entry.contentRect.height === height))
-        return;
-      width = entry.contentRect.width;
-      height = entry.contentRect.height;
-      if (!frame)
-        frame = requestAnimationFrame(() => {
-          frame = 0;
-          chart.resize();
-        });
+    let observer: ResizeObserver | undefined;
+    // Initialize one frame later so the rest of the page paints before the canvas work.
+    const start = requestAnimationFrame(() => {
+      const chart = echarts.init(host);
+      chartRef.current = chart;
+      applyRef.current();
+      let width = host.clientWidth,
+        height = host.clientHeight;
+      observer = new ResizeObserver(([entry]) => {
+        if (!entry || (entry.contentRect.width === width && entry.contentRect.height === height))
+          return;
+        width = entry.contentRect.width;
+        height = entry.contentRect.height;
+        if (!frame)
+          frame = requestAnimationFrame(() => {
+            frame = 0;
+            chart.resize();
+          });
+      });
+      observer.observe(host);
     });
-    observer.observe(host);
     return () => {
-      observer.disconnect();
+      cancelAnimationFrame(start);
+      observer?.disconnect();
       cancelAnimationFrame(frame);
-      chart.dispose();
+      chartRef.current?.dispose();
       chartRef.current = null;
     };
   }, []);
@@ -70,6 +77,7 @@ export function EChart({
         },
         { notMerge: true },
       );
+    applyRef.current = apply;
     apply();
     motion.addEventListener("change", apply);
     return () => motion.removeEventListener("change", apply);
