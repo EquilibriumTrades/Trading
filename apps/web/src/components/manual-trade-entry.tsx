@@ -174,7 +174,7 @@ export function ManualTradeEntry({ onSaved }: { onSaved: () => void }) {
           />
         </MonetaryField>
         <p className="text-xs text-muted-foreground">
-          Positive = funding paid. Negative = funding received.
+          Positive = funding received (adds to P&amp;L). Negative = funding paid (reduces P&amp;L).
         </p>
       </div>
       <div className="space-y-1">
