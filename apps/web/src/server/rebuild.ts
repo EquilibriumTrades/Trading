@@ -25,8 +25,14 @@ export const rebuildAccount = (accountId: string): void => {
       obsolete.delete(trip.key);
       const fundingFee = fundingByKey.get(trip.key) ?? 0;
       const netPnl = trip.netPnl - fundingFee;
-      const status = trip.status === "open" ? "open" : netPnl > 0 ? "win" : netPnl < 0 ? "loss" : "breakeven";
-      const computed = {
+      const status: "open" | "win" | "loss" | "breakeven" =
+        trip.status === "open" ? "open" : netPnl > 0 ? "win" : netPnl < 0 ? "loss" : "breakeven";
+      const computed: Pick<
+        typeof trades.$inferInsert,
+        | "accountId" | "symbol" | "assetClass" | "direction" | "status" | "openedAt" | "closedAt"
+        | "quantity" | "openQuantity" | "avgEntry" | "avgExit" | "grossPnl" | "fees" | "netPnl"
+        | "executionCount" | "executionIdsJson" | "exitsJson" | "durationMs"
+      > = {
         accountId: trip.accountId, symbol: trip.symbol, assetClass: trip.assetClass ?? null, direction: trip.direction,
         status, openedAt: trip.openedAt, closedAt: trip.closedAt ?? null, quantity: trip.quantity,
         openQuantity: trip.openQuantity, avgEntry: trip.avgEntry, avgExit: trip.avgExit ?? null, grossPnl: trip.grossPnl,
