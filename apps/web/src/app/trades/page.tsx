@@ -41,6 +41,7 @@ interface TradeRow {
   avgExit: number | null;
   grossPnl: number;
   fees: number;
+  leverage: number;
   netPnl: number;
   executionCount: number;
   durationMs: number | null;
@@ -143,6 +144,12 @@ function Trades() {
             </Badge>
           );
         },
+      },
+      {
+        id: "leverage",
+        accessorKey: "leverage",
+        header: "Leverage",
+        cell: ({ getValue }) => <span className="tnum">{fmtNumber(getValue<number>(), 2)}×</span>,
       },
       {
         id: "quantity",
