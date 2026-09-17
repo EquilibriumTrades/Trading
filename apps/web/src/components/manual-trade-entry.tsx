@@ -19,20 +19,23 @@ import { fmtNumber } from "@/lib/utils";
 
 interface ManualLeg {
   datetime: string;
-  side: "buy" | "sell";
+  action: "add" | "close";
   quantity: string;
   price: string;
   fee: string;
 }
 
+type Direction = "long" | "short";
+
 export function ManualTradeEntry({ onSaved }: { onSaved: () => void }) {
   const [accountId, setAccountId] = useState("");
   const [symbol, setSymbol] = useState("");
+  const [direction, setDirection] = useState<Direction>("long");
   const [notes, setNotes] = useState("");
   const [fundingFee, setFundingFee] = useState("");
   const [legs, setLegs] = useState<ManualLeg[]>([
-    { datetime: "", side: "buy", quantity: "", price: "", fee: "" },
-    { datetime: "", side: "sell", quantity: "", price: "", fee: "" },
+    { datetime: "", action: "add", quantity: "", price: "", fee: "" },
+    { datetime: "", action: "close", quantity: "", price: "", fee: "" },
   ]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -46,6 +49,11 @@ export function ManualTradeEntry({ onSaved }: { onSaved: () => void }) {
   );
   const valid = accountId && symbol && completedLegs.length >= 2;
 
+  const sideFor = (action: ManualLeg["action"]): "buy" | "sell" => {
+    if (direction === "long") return action === "add" ? "buy" : "sell";
+    return action === "add" ? "sell" : "buy";
+  };
+
   const save = async () => {
     if (!valid || busy) return;
     setBusy(true);
@@ -57,7 +65,7 @@ export function ManualTradeEntry({ onSaved }: { onSaved: () => void }) {
         ...(notes.trim() ? { notes } : {}),
         executions: completedLegs.map((leg) => ({
           symbol,
-          side: leg.side,
+          side: sideFor(leg.action),
           quantity: Number(leg.quantity),
           price: Number(leg.price),
           fee: leg.fee === "" ? 0 : Number(leg.fee),
@@ -75,16 +83,30 @@ export function ManualTradeEntry({ onSaved }: { onSaved: () => void }) {
   return (
     <fieldset disabled={busy} className="min-w-0 space-y-3">
       <AccountPicker value={accountId} onChange={setAccountId} kind="manual" />
-      <div>
-        <Label htmlFor={`${fieldId}-symbol`} className="mb-1 block text-xs text-muted-foreground">
-          Symbol
-        </Label>
-        <Input
-          id={`${fieldId}-symbol`}
-          value={symbol}
-          onChange={(event) => setSymbol(event.target.value.toUpperCase())}
-          placeholder="AAPL, ESZ6, BTCUSDT…"
-        />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label htmlFor={`${fieldId}-symbol`} className="mb-1 block text-xs text-muted-foreground">
+            Symbol
+          </Label>
+          <Input
+            id={`${fieldId}-symbol`}
+            value={symbol}
+            onChange={(event) => setSymbol(event.target.value.toUpperCase())}
+            placeholder="AAPL, ESZ6, BTCUSDT…"
+          />
+        </div>
+        <div className="grid min-w-0 gap-1 text-xs text-muted-foreground">
+          <span id={`${fieldId}-direction`}>Direction</span>
+          <Select value={direction} onValueChange={(value) => setDirection(value as Direction)}>
+            <SelectTrigger aria-labelledby={`${fieldId}-direction`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="long">Long</SelectItem>
+              <SelectItem value="short">Short</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       <div className="manual-executions space-y-3">
         {legs.map((leg, index) => (
@@ -102,19 +124,25 @@ export function ManualTradeEntry({ onSaved }: { onSaved: () => void }) {
               />
             </label>
             <div className="grid min-w-0 gap-1 text-xs text-muted-foreground">
-              <span id={`${fieldId}-execution-side-${index}`}>Side</span>
-              <Select
-                value={leg.side}
-                onValueChange={(value) => setLeg(index, { side: value as "buy" | "sell" })}
-              >
-                <SelectTrigger aria-labelledby={`${fieldId}-execution-side-${index}`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="buy">Buy</SelectItem>
-                  <SelectItem value="sell">Sell</SelectItem>
-                </SelectContent>
-              </Select>
+              <span id={`${fieldId}-execution-action-${index}`}>Action</span>
+              {index === 0 ? (
+                <div className="flex h-9 items-center rounded-md border border-input bg-muted/30 px-3 text-sm text-foreground">
+                  {direction === "long" ? "Long" : "Short"}
+                </div>
+              ) : (
+                <Select
+                  value={leg.action}
+                  onValueChange={(value) => setLeg(index, { action: value as ManualLeg["action"] })}
+                >
+                  <SelectTrigger aria-labelledby={`${fieldId}-execution-action-${index}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="add">{direction === "long" ? "Add Long" : "Add Short"}</SelectItem>
+                    <SelectItem value="close">{direction === "long" ? "Close Long" : "Close Short"}</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">
               Quantity
@@ -156,7 +184,7 @@ export function ManualTradeEntry({ onSaved }: { onSaved: () => void }) {
         onClick={() =>
           setLegs((current) => [
             ...current,
-            { datetime: "", side: "sell", quantity: "", price: "", fee: "" },
+            { datetime: "", action: "close", quantity: "", price: "", fee: "" },
           ])
         }
       >
