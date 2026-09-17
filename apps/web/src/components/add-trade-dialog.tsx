@@ -4,15 +4,41 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import { ManualTradeEntry } from "./manual-trade-entry";
 import { Button } from "./ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "./ui/dialog";
 
 export function AddTradeDialog({ onSaved }: { onSaved: () => void }) {
   const [open, setOpen] = useState(false);
-  return <Dialog open={open} onOpenChange={setOpen}>
-    <DialogTrigger asChild><Button size="sm"><Plus className="h-3.5 w-3.5" />Add trade</Button></DialogTrigger>
-    <DialogContent className="sm:max-w-3xl">
-      <DialogHeader><DialogTitle>Add trade</DialogTitle><DialogDescription>Choose long or short, enter the trade entry, choose whether the trade is closed, and add any trading or funding fees.</DialogDescription></DialogHeader>
-      <ManualTradeEntry onSaved={() => { setOpen(false); onSaved(); }} />
-    </DialogContent>
-  </Dialog>;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm">
+          <Plus className="h-3.5 w-3.5" />
+          Add trade
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Add trade</DialogTitle>
+          <DialogDescription>
+            Enter at least two executions for the trade. Add more executions for partial entries,
+            take profits, stop losses, or other fills, then add any funding fee below them.
+          </DialogDescription>
+        </DialogHeader>
+        <ManualTradeEntry
+          onSaved={() => {
+            setOpen(false);
+            onSaved();
+          }}
+        />
+      </DialogContent>
+    </Dialog>
+  );
 }
