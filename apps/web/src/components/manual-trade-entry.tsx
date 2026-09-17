@@ -5,194 +5,65 @@ import { MonetaryField } from "@/components/privacy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { postJson } from "@/lib/use-api";
-
 import { AccountPicker } from "./account-picker";
-import { fmtNumber } from "@/lib/utils";
-
-interface ManualLeg {
-  datetime: string;
-  side: "buy" | "sell";
-  quantity: string;
-  price: string;
-  fee: string;
-}
 
 export function ManualTradeEntry({ onSaved }: { onSaved: () => void }) {
   const [accountId, setAccountId] = useState("");
   const [symbol, setSymbol] = useState("");
+  const [direction, setDirection] = useState<"long" | "short">("long");
+  const [tradeClose, setTradeClose] = useState<"open" | "closed">("closed");
+  const [entryTime, setEntryTime] = useState("");
+  const [exitTime, setExitTime] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [entryPrice, setEntryPrice] = useState("");
+  const [exitPrice, setExitPrice] = useState("");
+  const [entryFee, setEntryFee] = useState("");
+  const [exitFee, setExitFee] = useState("");
+  const [fundingFee, setFundingFee] = useState("");
   const [notes, setNotes] = useState("");
-  const [legs, setLegs] = useState<ManualLeg[]>([
-    { datetime: "", side: "buy", quantity: "", price: "", fee: "" },
-    { datetime: "", side: "sell", quantity: "", price: "", fee: "" },
-  ]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const fieldId = useId();
-
-  const setLeg = (index: number, patch: Partial<ManualLeg>) =>
-    setLegs((current) => current.map((leg, i) => (i === index ? { ...leg, ...patch } : leg)));
-
-  const valid =
-    accountId &&
-    symbol &&
-    legs.some((leg) => leg.datetime && Number(leg.quantity) > 0 && leg.price !== "");
+  const valid = Boolean(accountId && symbol && entryTime && Number(quantity) > 0 && entryPrice !== "" && (tradeClose === "open" || (exitTime && exitPrice !== "")));
 
   const save = async () => {
     if (!valid || busy) return;
-    setBusy(true);
-    setError("");
+    setBusy(true); setError("");
     try {
-      await postJson("/api/executions", {
-        accountId,
-        ...(notes.trim() ? { notes } : {}),
-        executions: legs
-          .filter((leg) => leg.datetime && Number(leg.quantity) > 0 && leg.price !== "")
-          .map((leg) => ({
-            symbol,
-            side: leg.side,
-            quantity: Number(leg.quantity),
-            price: Number(leg.price),
-            fee: leg.fee === "" ? 0 : Number(leg.fee),
-            executedAt: new Date(leg.datetime).toISOString(),
-          })),
-      });
+      const entrySide: "buy" | "sell" = direction === "long" ? "buy" : "sell";
+      const exitSide: "buy" | "sell" = direction === "long" ? "sell" : "buy";
+      const executions = [{ symbol, side: entrySide, quantity: Number(quantity), price: Number(entryPrice), fee: entryFee === "" ? 0 : Number(entryFee), executedAt: new Date(entryTime).toISOString() }];
+      if (tradeClose === "closed") executions.push({ symbol, side: exitSide, quantity: Number(quantity), price: Number(exitPrice), fee: exitFee === "" ? 0 : Number(exitFee), executedAt: new Date(exitTime).toISOString() });
+      await postJson("/api/executions", { accountId, executions, fundingFee: fundingFee === "" ? 0 : Number(fundingFee), ...(notes.trim() ? { notes } : {}) });
       onSaved();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Couldn’t save the trade. Try again.");
-    } finally {
-      setBusy(false);
-    }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Couldn’t save the trade. Try again."); }
+    finally { setBusy(false); }
   };
 
-  return (
-    <fieldset disabled={busy} className="min-w-0 space-y-3">
-      <AccountPicker value={accountId} onChange={setAccountId} kind="manual" />
-      <div>
-        <Label htmlFor={`${fieldId}-symbol`} className="mb-1 block text-xs text-muted-foreground">
-          Symbol
-        </Label>
-        <Input
-          id={`${fieldId}-symbol`}
-          value={symbol}
-          onChange={(event) => setSymbol(event.target.value.toUpperCase())}
-          placeholder="AAPL, ESZ6, BTCUSDT…"
-        />
-      </div>
-      <div className="manual-executions space-y-3">
-        {legs.map((leg, index) => (
-          <fieldset
-            key={index}
-            className="manual-execution-row grid min-w-0 gap-2 rounded-lg border p-3"
-          >
-            <legend className="px-1 text-xs text-muted-foreground">Execution {index + 1}</legend>
-            <label className="manual-execution-date grid min-w-0 gap-1 text-xs text-muted-foreground">
-              Date & time
-              <Input
-                type="datetime-local"
-                value={leg.datetime}
-                onChange={(event) => setLeg(index, { datetime: event.target.value })}
-              />
-            </label>
-            <div className="grid min-w-0 gap-1 text-xs text-muted-foreground">
-              <span id={`${fieldId}-execution-side-${index}`}>Side</span>
-              <Select
-                value={leg.side}
-                onValueChange={(value) => setLeg(index, { side: value as "buy" | "sell" })}
-              >
-                <SelectTrigger aria-labelledby={`${fieldId}-execution-side-${index}`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="buy">Buy</SelectItem>
-                  <SelectItem value="sell">Sell</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">
-              Quantity
-              <Input
-                placeholder="qty"
-                inputMode="decimal"
-                value={leg.quantity}
-                onChange={(event) => setLeg(index, { quantity: event.target.value })}
-              />
-            </label>
-            <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">
-              Price
-              <MonetaryField>
-                <Input
-                  placeholder="price"
-                  inputMode="decimal"
-                  value={leg.price}
-                  onChange={(event) => setLeg(index, { price: event.target.value })}
-                />
-              </MonetaryField>
-            </label>
-            <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">
-              Fee
-              <MonetaryField>
-                <Input
-                  placeholder="fee"
-                  inputMode="decimal"
-                  value={leg.fee}
-                  onChange={(event) => setLeg(index, { fee: event.target.value })}
-                />
-              </MonetaryField>
-            </label>
-          </fieldset>
-        ))}
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor={`${fieldId}-notes`}>Notes (optional)</Label>
-        <textarea
-          id={`${fieldId}-notes`}
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-          maxLength={100000}
-          rows={4}
-          placeholder="Your setup, why you took the trade, or what you learned…"
-          className="flex w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-        />
-        <p className="text-xs text-muted-foreground">
-          Markdown supported. Notes are saved with the trade; existing notes are kept when adding to
-          an open position.
-        </p>
-      </div>
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            setLegs((current) => [
-              ...current,
-              { datetime: "", side: "sell", quantity: "", price: "", fee: "" },
-            ])
-          }
-        >
-          Add execution
-        </Button>
-        <Button size="sm" onClick={save} disabled={!valid || busy}>
-          {busy ? "Saving…" : "Save trade"}
-        </Button>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Dates and times use your device’s timezone. Executions matching an open position on{" "}
-        {symbol || "the symbol"} are stitched into round trips automatically (
-        {fmtNumber(legs.filter((leg) => leg.datetime).length, 0)} legs so far).
-      </p>
-    </fieldset>
-  );
+  return <fieldset disabled={busy} className="min-w-0 space-y-4">
+    <AccountPicker value={accountId} onChange={setAccountId} kind="manual" />
+    <div className="grid gap-3 sm:grid-cols-3">
+      <div><Label htmlFor={`${fieldId}-symbol`}>Symbol</Label><Input id={`${fieldId}-symbol`} value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} placeholder="BTCUSDT" /></div>
+      <div><Label>Direction</Label><Select value={direction} onValueChange={(v) => setDirection(v as "long" | "short")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="long">Long</SelectItem><SelectItem value="short">Short</SelectItem></SelectContent></Select></div>
+      <div><Label>Trade close</Label><Select value={tradeClose} onValueChange={(v) => setTradeClose(v as "open" | "closed")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="closed">Closed</SelectItem><SelectItem value="open">Still open</SelectItem></SelectContent></Select></div>
+    </div>
+    <div className="rounded-lg border p-3"><div className="mb-2 text-sm font-medium">Entry</div><div className="grid gap-2 sm:grid-cols-4">
+      <div><Label>Entry date & time</Label><Input type="datetime-local" value={entryTime} onChange={(e) => setEntryTime(e.target.value)} /></div>
+      <div><Label>Quantity</Label><Input inputMode="decimal" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="qty" /></div>
+      <div><Label>Entry price</Label><MonetaryField><Input inputMode="decimal" value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} placeholder="price" /></MonetaryField></div>
+      <div><Label>Entry fee</Label><MonetaryField><Input inputMode="decimal" value={entryFee} onChange={(e) => setEntryFee(e.target.value)} placeholder="0" /></MonetaryField></div>
+    </div></div>
+    {tradeClose === "closed" && <div className="rounded-lg border p-3"><div className="mb-2 text-sm font-medium">Trade close</div><div className="grid gap-2 sm:grid-cols-3">
+      <div><Label>Close date & time</Label><Input type="datetime-local" value={exitTime} onChange={(e) => setExitTime(e.target.value)} /></div>
+      <div><Label>Close price</Label><MonetaryField><Input inputMode="decimal" value={exitPrice} onChange={(e) => setExitPrice(e.target.value)} placeholder="price" /></MonetaryField></div>
+      <div><Label>Close fee</Label><MonetaryField><Input inputMode="decimal" value={exitFee} onChange={(e) => setExitFee(e.target.value)} placeholder="0" /></MonetaryField></div>
+    </div></div>}
+    <div><Label>Funding fee</Label><MonetaryField><Input inputMode="decimal" value={fundingFee} onChange={(e) => setFundingFee(e.target.value)} placeholder="0" /></MonetaryField><p className="mt-1 text-xs text-muted-foreground">Positive = funding paid. Negative = funding received.</p></div>
+    <div><Label htmlFor={`${fieldId}-notes`}>Notes (optional)</Label><textarea id={`${fieldId}-notes`} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={100000} rows={4} placeholder="Your setup, why you took the trade, or what you learned…" className="flex w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50" /></div>
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    <Button size="sm" onClick={save} disabled={!valid || busy}>{busy ? "Saving…" : "Save trade"}</Button>
+    <p className="text-xs text-muted-foreground">Long/short is converted to the correct buy/sell executions automatically. Dates and times use your device’s timezone.</p>
+  </fieldset>;
 }
