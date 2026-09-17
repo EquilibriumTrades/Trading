@@ -16,19 +16,20 @@ const createDb = () => {
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
   sqlite.exec(BOOTSTRAP_SQL);
-  // Additive upgrade: existing executions retain their fields and dedup hashes.
   const executionColumns = sqlite.pragma("table_info(executions)") as { name: string }[];
   if (!executionColumns.some((column) => column.name === "import_metadata_json")) {
     sqlite.exec("ALTER TABLE executions ADD COLUMN import_metadata_json TEXT");
   }
-  // Materialize CSV bounds once so connection and range lookups never scan candle JSON.
+  // Funding is a trade-level cost. Positive values reduce net P&L; negative values represent funding received.
+  const tradeColumns = sqlite.pragma("table_info(trades)") as { name: string }[];
+  if (!tradeColumns.some((column) => column.name === "funding_fee")) {
+    sqlite.exec("ALTER TABLE trades ADD COLUMN funding_fee REAL NOT NULL DEFAULT 0");
+  }
   const csvColumns = sqlite.pragma("table_info(market_csv_datasets)") as { name: string }[];
   sqlite.transaction(() => {
     for (const name of ["bar_count", "first_time", "last_time"]) {
       if (!csvColumns.some((column) => column.name === name))
-        sqlite.exec(
-          `ALTER TABLE market_csv_datasets ADD COLUMN ${name} INTEGER NOT NULL DEFAULT 0`,
-        );
+        sqlite.exec(`ALTER TABLE market_csv_datasets ADD COLUMN ${name} INTEGER NOT NULL DEFAULT 0`);
     }
     sqlite.exec(`UPDATE market_csv_datasets SET
       bar_count = json_array_length(bars_json),
