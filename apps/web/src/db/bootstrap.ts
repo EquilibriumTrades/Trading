@@ -55,6 +55,8 @@ CREATE TABLE IF NOT EXISTS trades (
   avg_exit REAL,
   gross_pnl REAL NOT NULL,
   fees REAL NOT NULL,
+  funding_fee REAL NOT NULL DEFAULT 0,
+  leverage REAL NOT NULL DEFAULT 1,
   net_pnl REAL NOT NULL,
   execution_count INTEGER NOT NULL,
   execution_ids_json TEXT NOT NULL,
