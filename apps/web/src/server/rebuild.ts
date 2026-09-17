@@ -24,7 +24,7 @@ export const rebuildAccount = (accountId: string): void => {
     for (const trip of trips) {
       obsolete.delete(trip.key);
       const fundingFee = fundingByKey.get(trip.key) ?? 0;
-      const netPnl = trip.netPnl - fundingFee;
+      const netPnl = trip.netPnl + fundingFee;
       const status: "open" | "win" | "loss" | "breakeven" =
         trip.status === "open" ? "open" : netPnl > 0 ? "win" : netPnl < 0 ? "loss" : "breakeven";
       const computed: Pick<
