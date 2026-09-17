@@ -17,29 +17,17 @@ const createDb = () => {
   sqlite.pragma("foreign_keys = ON");
   sqlite.exec(BOOTSTRAP_SQL);
   const executionColumns = sqlite.pragma("table_info(executions)") as { name: string }[];
-  if (!executionColumns.some((column) => column.name === "import_metadata_json")) {
-    sqlite.exec("ALTER TABLE executions ADD COLUMN import_metadata_json TEXT");
-  }
-  // Funding is a trade-level cost. Positive values reduce net P&L; negative values represent funding received.
+  if (!executionColumns.some((column) => column.name === "import_metadata_json")) sqlite.exec("ALTER TABLE executions ADD COLUMN import_metadata_json TEXT");
   const tradeColumns = sqlite.pragma("table_info(trades)") as { name: string }[];
-  if (!tradeColumns.some((column) => column.name === "funding_fee")) {
-    sqlite.exec("ALTER TABLE trades ADD COLUMN funding_fee REAL NOT NULL DEFAULT 0");
-  }
+  if (!tradeColumns.some((column) => column.name === "funding_fee")) sqlite.exec("ALTER TABLE trades ADD COLUMN funding_fee REAL NOT NULL DEFAULT 0");
+  if (!tradeColumns.some((column) => column.name === "leverage")) sqlite.exec("ALTER TABLE trades ADD COLUMN leverage REAL NOT NULL DEFAULT 1");
   const csvColumns = sqlite.pragma("table_info(market_csv_datasets)") as { name: string }[];
   sqlite.transaction(() => {
-    for (const name of ["bar_count", "first_time", "last_time"]) {
-      if (!csvColumns.some((column) => column.name === name))
-        sqlite.exec(`ALTER TABLE market_csv_datasets ADD COLUMN ${name} INTEGER NOT NULL DEFAULT 0`);
-    }
-    sqlite.exec(`UPDATE market_csv_datasets SET
-      bar_count = json_array_length(bars_json),
-      first_time = json_extract(bars_json, '$[0].time'),
-      last_time = json_extract(bars_json, '$[#-1].time') WHERE bar_count = 0`);
+    for (const name of ["bar_count", "first_time", "last_time"]) if (!csvColumns.some((column) => column.name === name)) sqlite.exec(`ALTER TABLE market_csv_datasets ADD COLUMN ${name} INTEGER NOT NULL DEFAULT 0`);
+    sqlite.exec(`UPDATE market_csv_datasets SET bar_count = json_array_length(bars_json), first_time = json_extract(bars_json, '$[0].time'), last_time = json_extract(bars_json, '$[#-1].time') WHERE bar_count = 0`);
   })();
   return drizzle(sqlite, { schema });
 };
 
-/** Singleton across Next dev hot reloads. */
 export const db = globalForDb.__journalDb ?? (globalForDb.__journalDb = createDb());
-
 export * from "./schema";
