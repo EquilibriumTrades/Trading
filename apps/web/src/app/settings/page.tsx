@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { JournalDefaultSettings } from "@/components/journal-default-settings";
 import { MarketDataSettings } from "@/components/market-data-settings";
-import { AiSettings } from "@/components/ai-settings";
 import { Download } from "lucide-react";
 import { FilterBar } from "@/components/filter-bar";
 import { Button } from "@/components/ui/button";
@@ -96,7 +95,7 @@ function Settings() {
                 disabled={!data}
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Trade times, calendars, journal days, and analytics use this timezone.
+                Trade times, calendars, day reviews, and analytics use this timezone.
               </p>
               <button
                 className="mt-1 text-xs text-muted-foreground underline"
@@ -146,8 +145,6 @@ function Settings() {
             </Button>
           </CardContent>
         </Card>
-
-        <AiSettings />
 
         <Card>
           <CardHeader>
