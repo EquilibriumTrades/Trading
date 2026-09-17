@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { ImagePlus, Paperclip, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ImagePlus, Paperclip, Trash2, X } from "lucide-react";
 import { HoverHint } from "./ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { postJson, useApi } from "@/lib/use-api";
@@ -19,7 +19,22 @@ export function Attachments({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [preview, setPreview] = useState<{ id: string; name: string } | null>(null);
   const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!preview) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreview(null);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [preview]);
 
   const uploadFiles = useCallback(
     async (files: File[]) => {
@@ -120,21 +135,29 @@ export function Attachments({
         {data?.attachments.map((attachment) => (
           <div key={attachment.id} className="min-w-0 rounded-md border p-2">
             <HoverHint content={attachment.name}>
-              <a
-                href={`/api/attachments/${attachment.id}`}
-                target="_blank"
-                rel="noreferrer"
-                className="block"
-              >
-                {attachment.mime.startsWith("image/") && (
+              {attachment.mime.startsWith("image/") ? (
+                <button
+                  type="button"
+                  className="block w-full cursor-zoom-in text-left"
+                  onClick={() => setPreview({ id: attachment.id, name: attachment.name })}
+                >
                   <img
                     src={`/api/attachments/${attachment.id}`}
                     alt={attachment.name}
                     className="mb-2 h-40 w-full rounded object-contain"
                   />
-                )}
-                <span className="block truncate text-xs underline">{attachment.name}</span>
-              </a>
+                  <span className="block truncate text-xs underline">{attachment.name}</span>
+                </button>
+              ) : (
+                <a
+                  href={`/api/attachments/${attachment.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block"
+                >
+                  <span className="block truncate text-xs underline">{attachment.name}</span>
+                </a>
+              )}
             </HoverHint>
             <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
               <span>{Math.round(attachment.size / 1024)} KB</span>
@@ -160,6 +183,34 @@ export function Attachments({
           </div>
         ))}
       </div>
+
+      {preview && (
+        <div
+          className="fixed inset-0 z-[100] flex cursor-zoom-out items-center justify-center bg-black/85 p-4 sm:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Preview ${preview.name}`}
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setPreview(null);
+          }}
+        >
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            className="absolute right-4 top-4 z-10 rounded-full shadow-lg"
+            aria-label="Close image preview"
+            onClick={() => setPreview(null)}
+          >
+            <X className="h-5 w-5" />
+          </Button>
+          <img
+            src={`/api/attachments/${preview.id}`}
+            alt={preview.name}
+            className="max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] cursor-default object-contain sm:max-h-[calc(100vh-4rem)] sm:max-w-[calc(100vw-4rem)]"
+          />
+        </div>
+      )}
     </div>
   );
 }
