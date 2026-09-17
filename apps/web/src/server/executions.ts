@@ -7,63 +7,21 @@ import { getJournalDefaults } from "./settings";
 import { defaultFee } from "@/lib/journal-defaults";
 import { requireValue } from "./api";
 
-export interface InsertResult { inserted: number; duplicates: number; skipped: number; skippedReasons: string[]; }
-export type ExecutionSource = "sync" | "import" | "manual";
-const MAX_SKIP_REASONS = 5;
-const isFiniteNumber = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n);
-
-export const executionProblem = (row: unknown, source: ExecutionSource): string | null => {
-  if (!row || typeof row !== "object") return "Execution is missing.";
-  const r = row as Partial<ImportedExecution>;
-  const label = typeof r.symbol === "string" && r.symbol.trim() ? r.symbol.trim() : "execution";
-  if (typeof r.symbol !== "string" || !r.symbol.trim()) return "An execution has no symbol.";
-  if (!["buy", "sell"].includes(r.side as string)) return `${label}: side must be buy or sell.`;
-  if (!isFiniteNumber(r.quantity) || r.quantity <= 0) return `${label}: quantity must be a finite positive number.`;
-  if (!isFiniteNumber(r.price)) return `${label}: price must be a finite number.`;
-  if (!isFiniteNumber(r.fee ?? 0)) return `${label}: fee must be a finite number.`;
-  if (typeof r.executedAt !== "string" || !Number.isFinite(Date.parse(r.executedAt))) return `${label}: timestamp is missing or invalid.`;
-  const meta = r.importMetadata;
-  const metaOk = !meta || (source === "import" && typeof meta.id === "string" && meta.id.length > 0 && meta.id.length <= 2000 && (meta.group === undefined || (typeof meta.group === "string" && meta.group.length > 0 && meta.group.length <= 2000)) && Number.isSafeInteger(meta.order) && meta.order >= 0 && (meta.reportedGrossPnl === undefined || Number.isFinite(meta.reportedGrossPnl)) && (meta.preserveFee === undefined || typeof meta.preserveFee === "boolean"));
-  if (!metaOk) return `${label}: invalid imported execution metadata.`;
-  return null;
-};
-
-export const partitionExecutions = (rows: ImportedExecution[], source: ExecutionSource): { usable: ImportedExecution[]; skipped: number; skippedReasons: string[] } => {
-  const usable: ImportedExecution[] = []; const skippedReasons: string[] = []; let skipped = 0;
-  for (const row of rows) { const problem = executionProblem(row, source); if (problem === null) { usable.push(row); continue; } if (source === "manual") requireValue(false, "Every execution needs a symbol, buy/sell side, finite positive quantity, price, fee and valid timestamp."); skipped++; if (skippedReasons.length < MAX_SKIP_REASONS) skippedReasons.push(problem); }
-  return { usable, skipped, skippedReasons };
-};
-
-export const insertExecutions = (accountId: string, rows: ImportedExecution[], source: ExecutionSource, manualNotes?: string, manualFundingFee?: number): InsertResult => {
-  requireValue(manualNotes === undefined || (source === "manual" && typeof manualNotes === "string" && manualNotes.length <= 100000), "Manual trade notes must be at most 100,000 characters.");
-  requireValue(manualFundingFee === undefined || (source === "manual" && Number.isFinite(manualFundingFee)), "Funding fee is only supported for manual trades and must be finite.");
-  requireValue(db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, accountId)).get(), "Account not found.");
-  const { usable, skipped, skippedReasons } = partitionExecutions(rows, source);
-  let inserted = 0; let duplicates = 0; const createdAt = nowIso(); const defaults = getJournalDefaults(); const note = manualNotes?.trim() ? manualNotes : undefined;
-
-  db.transaction((tx) => {
-    const affectedExecutionIds = new Set<string>();
-    for (const row of usable) {
-      const id = newId(); const contentHash = executionHash(row);
-      const result = tx.insert(executions).values({ id, accountId, symbol: row.symbol, side: row.side, quantity: row.quantity, price: row.price, fee: row.importMetadata?.preserveFee ? row.fee : defaultFee(row.fee, row.quantity, accountId, row.symbol, defaults), executedAt: row.executedAt, assetClass: row.assetClass ?? null, source, importMetadataJson: row.importMetadata ? JSON.stringify(row.importMetadata) : null, contentHash, createdAt }).onConflictDoNothing().run();
-      if (result.changes > 0) { inserted++; affectedExecutionIds.add(id); }
-      else { duplicates++; const existing = tx.select({ id: executions.id }).from(executions).where(and(eq(executions.accountId, accountId), eq(executions.contentHash, contentHash))).get(); if (existing) affectedExecutionIds.add(existing.id); }
-    }
-    if (inserted > 0) rebuildAccount(accountId);
-    if (note || manualFundingFee !== undefined) {
-      const affected = tx.select({ key: trades.key, notes: trades.notes, fundingFee: trades.fundingFee, netPnl: trades.netPnl, status: trades.status, executionIdsJson: trades.executionIdsJson }).from(trades).where(eq(trades.accountId, accountId)).all();
-      for (const trade of affected) {
-        const ids = JSON.parse(trade.executionIdsJson) as string[];
-        if (!ids.some((id) => affectedExecutionIds.has(id))) continue;
-        const patch: Partial<typeof trades.$inferInsert> = {};
-        if (note && trade.notes !== note && !trade.notes?.endsWith(`\n\n${note}`)) { const notes = trade.notes?.trim() ? `${trade.notes}\n\n${note}` : note; requireValue(notes.length <= 100000, "Combined trade notes must be at most 100,000 characters."); patch.notes = notes; }
-        if (manualFundingFee !== undefined) { const oldFunding = trade.fundingFee ?? 0; const netPnl = trade.netPnl - oldFunding + manualFundingFee; patch.fundingFee = manualFundingFee; patch.netPnl = netPnl; if (trade.status !== "open") patch.status = netPnl > 0 ? "win" : netPnl < 0 ? "loss" : "breakeven"; }
-        if (Object.keys(patch).length) tx.update(trades).set(patch).where(eq(trades.key, trade.key)).run();
-      }
-    }
-  });
-  return { inserted, duplicates, skipped, skippedReasons };
-};
-
-export const deleteExecutionsForTrades = (accountId: string, executionIds: string[]): void => { if (executionIds.length === 0) return; db.delete(executions).where(and(eq(executions.accountId, accountId), inArray(executions.id, executionIds))).run(); rebuildAccount(accountId); };
-export const listExecutions = (accountId: string, ids?: string[]) => ids && ids.length > 0 ? db.select().from(executions).where(and(eq(executions.accountId, accountId), inArray(executions.id, ids))).all() : db.select().from(executions).where(eq(executions.accountId, accountId)).all();
+export interface InsertResult { inserted:number; duplicates:number; skipped:number; skippedReasons:string[]; }
+export type ExecutionSource="sync"|"import"|"manual";
+const MAX_SKIP_REASONS=5;
+const isFiniteNumber=(n:unknown):n is number=>typeof n==="number"&&Number.isFinite(n);
+export const executionProblem=(row:unknown,source:ExecutionSource):string|null=>{ if(!row||typeof row!=="object")return"Execution is missing.";const r=row as Partial<ImportedExecution>;const label=typeof r.symbol==="string"&&r.symbol.trim()?r.symbol.trim():"execution";if(typeof r.symbol!=="string"||!r.symbol.trim())return"An execution has no symbol.";if(!["buy","sell"].includes(r.side as string))return`${label}: side must be buy or sell.`;if(!isFiniteNumber(r.quantity)||r.quantity<=0)return`${label}: quantity must be a finite positive number.`;if(!isFiniteNumber(r.price))return`${label}: price must be a finite number.`;if(!isFiniteNumber(r.fee??0))return`${label}: fee must be a finite number.`;if(typeof r.executedAt!=="string"||!Number.isFinite(Date.parse(r.executedAt)))return`${label}: timestamp is missing or invalid.`;const meta=r.importMetadata;const metaOk=!meta||(source==="import"&&typeof meta.id==="string"&&meta.id.length>0&&meta.id.length<=2000&&(meta.group===undefined||(typeof meta.group==="string"&&meta.group.length>0&&meta.group.length<=2000))&&Number.isSafeInteger(meta.order)&&meta.order>=0&&(meta.reportedGrossPnl===undefined||Number.isFinite(meta.reportedGrossPnl))&&(meta.preserveFee===undefined||typeof meta.preserveFee==="boolean"));if(!metaOk)return`${label}: invalid imported execution metadata.`;return null;};
+export const partitionExecutions=(rows:ImportedExecution[],source:ExecutionSource)=>{const usable:ImportedExecution[]=[];const skippedReasons:string[]=[];let skipped=0;for(const row of rows){const problem=executionProblem(row,source);if(problem===null){usable.push(row);continue;}if(source==="manual")requireValue(false,"Every execution needs a symbol, buy/sell side, finite positive quantity, price, fee and valid timestamp.");skipped++;if(skippedReasons.length<MAX_SKIP_REASONS)skippedReasons.push(problem);}return{usable,skipped,skippedReasons};};
+export const insertExecutions=(accountId:string,rows:ImportedExecution[],source:ExecutionSource,manualNotes?:string,manualFundingFee?:number,manualLeverage?:number):InsertResult=>{
+ requireValue(manualNotes===undefined||(source==="manual"&&typeof manualNotes==="string"&&manualNotes.length<=100000),"Manual trade notes must be at most 100,000 characters.");
+ requireValue(manualFundingFee===undefined||(source==="manual"&&Number.isFinite(manualFundingFee)),"Funding fee is only supported for manual trades and must be finite.");
+ requireValue(manualLeverage===undefined||(source==="manual"&&Number.isFinite(manualLeverage)&&manualLeverage>=1&&manualLeverage<=1000),"Leverage must be between 1x and 1000x.");
+ requireValue(db.select({id:accounts.id}).from(accounts).where(eq(accounts.id,accountId)).get(),"Account not found.");
+ const{usable,skipped,skippedReasons}=partitionExecutions(rows,source);let inserted=0,duplicates=0;const createdAt=nowIso(),defaults=getJournalDefaults(),note=manualNotes?.trim()?manualNotes:undefined;
+ db.transaction(tx=>{const affectedExecutionIds=new Set<string>();for(const row of usable){const id=newId(),contentHash=executionHash(row);const result=tx.insert(executions).values({id,accountId,symbol:row.symbol,side:row.side,quantity:row.quantity,price:row.price,fee:row.importMetadata?.preserveFee?row.fee:defaultFee(row.fee,row.quantity,accountId,row.symbol,defaults),executedAt:row.executedAt,assetClass:row.assetClass??null,source,importMetadataJson:row.importMetadata?JSON.stringify(row.importMetadata):null,contentHash,createdAt}).onConflictDoNothing().run();if(result.changes>0){inserted++;affectedExecutionIds.add(id);}else{duplicates++;const existing=tx.select({id:executions.id}).from(executions).where(and(eq(executions.accountId,accountId),eq(executions.contentHash,contentHash))).get();if(existing)affectedExecutionIds.add(existing.id);}}
+ if(inserted>0)rebuildAccount(accountId);
+ if(note||manualFundingFee!==undefined||manualLeverage!==undefined){const affected=tx.select({key:trades.key,notes:trades.notes,fundingFee:trades.fundingFee,netPnl:trades.netPnl,status:trades.status,executionIdsJson:trades.executionIdsJson}).from(trades).where(eq(trades.accountId,accountId)).all();for(const trade of affected){const ids=JSON.parse(trade.executionIdsJson) as string[];if(!ids.some(id=>affectedExecutionIds.has(id)))continue;const patch:Partial<typeof trades.$inferInsert>={};if(note&&trade.notes!==note&&!trade.notes?.endsWith(`\n\n${note}`)){const notes=trade.notes?.trim()?`${trade.notes}\n\n${note}`:note;requireValue(notes.length<=100000,"Combined trade notes must be at most 100,000 characters.");patch.notes=notes;}if(manualFundingFee!==undefined){const oldFunding=trade.fundingFee??0;const netPnl=trade.netPnl-oldFunding+manualFundingFee;patch.fundingFee=manualFundingFee;patch.netPnl=netPnl;if(trade.status!=="open")patch.status=netPnl>0?"win":netPnl<0?"loss":"breakeven";}if(manualLeverage!==undefined)patch.leverage=manualLeverage;if(Object.keys(patch).length)tx.update(trades).set(patch).where(eq(trades.key,trade.key)).run();}}
+ });return{inserted,duplicates,skipped,skippedReasons};};
+export const deleteExecutionsForTrades=(accountId:string,executionIds:string[]):void=>{if(executionIds.length===0)return;db.delete(executions).where(and(eq(executions.accountId,accountId),inArray(executions.id,executionIds))).run();rebuildAccount(accountId);};
+export const listExecutions=(accountId:string,ids?:string[])=>ids&&ids.length>0?db.select().from(executions).where(and(eq(executions.accountId,accountId),inArray(executions.id,ids))).all():db.select().from(executions).where(eq(executions.accountId,accountId)).all();
