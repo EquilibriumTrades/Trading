@@ -57,7 +57,7 @@ export const insertExecutions = (accountId: string, rows: ImportedExecution[], s
         if (!ids.some((id) => affectedExecutionIds.has(id))) continue;
         const patch: Partial<typeof trades.$inferInsert> = {};
         if (note && trade.notes !== note && !trade.notes?.endsWith(`\n\n${note}`)) { const notes = trade.notes?.trim() ? `${trade.notes}\n\n${note}` : note; requireValue(notes.length <= 100000, "Combined trade notes must be at most 100,000 characters."); patch.notes = notes; }
-        if (manualFundingFee !== undefined) { const oldFunding = trade.fundingFee ?? 0; const netPnl = trade.netPnl + oldFunding - manualFundingFee; patch.fundingFee = manualFundingFee; patch.netPnl = netPnl; if (trade.status !== "open") patch.status = netPnl > 0 ? "win" : netPnl < 0 ? "loss" : "breakeven"; }
+        if (manualFundingFee !== undefined) { const oldFunding = trade.fundingFee ?? 0; const netPnl = trade.netPnl - oldFunding + manualFundingFee; patch.fundingFee = manualFundingFee; patch.netPnl = netPnl; if (trade.status !== "open") patch.status = netPnl > 0 ? "win" : netPnl < 0 ? "loss" : "breakeven"; }
         if (Object.keys(patch).length) tx.update(trades).set(patch).where(eq(trades.key, trade.key)).run();
       }
     }
