@@ -1,6 +1,6 @@
 import { tradeRisk, tradeR, plannedR } from "@luxalgo/journal-core";
-import { eq } from "drizzle-orm";
-import { db, trades, playbooks, accounts } from "@/db";
+import { and, eq } from "drizzle-orm";
+import { db, trades, playbooks, accounts, attachments, tradeRuleChecks } from "@/db";
 import { bad, handler, ok, requireValue } from "@/server/api";
 import { deleteExecutionsForTrades, listExecutions } from "@/server/executions";
 import { nowIso } from "@/server/ids";
@@ -97,6 +97,14 @@ export const DELETE = handler(async (_request: Request, { params }: Params) => {
   const { key } = await params;
   const row = getTradeByKey(key);
   if (!row) return bad("Trade not found", 404);
+
+  db.transaction(() => {
+    db.delete(attachments)
+      .where(and(eq(attachments.ownerType, "trade"), eq(attachments.ownerId, row.key)))
+      .run();
+    db.delete(tradeRuleChecks).where(eq(tradeRuleChecks.tradeKey, row.key)).run();
+  });
+
   // Deleting a trade means deleting its executions; the rebuild removes the row.
   deleteExecutionsForTrades(row.accountId, JSON.parse(row.executionIdsJson) as string[]);
   return ok({ deleted: true });
