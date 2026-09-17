@@ -1,5 +1,5 @@
-import { eq, inArray } from "drizzle-orm";
-import { db, trades } from "@/db";
+import { and, eq, inArray } from "drizzle-orm";
+import { db, trades, attachments, tradeRuleChecks } from "@/db";
 import { bad, handler, ok } from "@/server/api";
 import { deleteExecutionsForTrades } from "@/server/executions";
 import { nowIso } from "@/server/ids";
@@ -45,6 +45,13 @@ export const POST = handler(async (request: Request) => {
         .run();
       return ok({ updated: rows.length });
     case "delete": {
+      db.transaction(() => {
+        db.delete(attachments)
+          .where(and(eq(attachments.ownerType, "trade"), inArray(attachments.ownerId, body.keys)))
+          .run();
+        db.delete(tradeRuleChecks).where(inArray(tradeRuleChecks.tradeKey, body.keys)).run();
+      });
+
       const byAccount = new Map<string, string[]>();
       for (const row of rows) {
         const ids = JSON.parse(row.executionIdsJson) as string[];
