@@ -53,6 +53,9 @@ interface StatsPayload {
   timeZone: string;
   metrics: TradeMetrics;
   initialBalance: number;
+  realizedPnl: number;
+  currentBalance: number;
+  totalReturnPct: number | null;
   edgeScore: EdgeScore;
   days: DayStats[];
   dailyCumulative: EquityPoint[];
@@ -170,6 +173,55 @@ function DashboardContent({
     <>
       <DashboardLayout
         widgets={[
+          {
+            id: "widget-account-balance",
+            label: "Account size",
+            size: "small",
+            layoutGroup: "summary",
+            content: (
+              <Card className="h-full">
+                <StatHeader
+                  title="Account size"
+                  icon={CircleDollarSign}
+                  hint="Starting balance plus all-time realized net P&L for the selected account(s)."
+                />
+                <CardContent>
+                  <div className="text-3xl font-semibold tracking-tight tnum">
+                    <MonetaryValue>{fmtMoney(data.currentBalance)}</MonetaryValue>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    <MonetaryValue>{fmtMoney(data.initialBalance)}</MonetaryValue> starting balance
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+          },
+          {
+            id: "widget-account-return",
+            label: "Account return",
+            size: "small",
+            layoutGroup: "summary",
+            content: (
+              <Card className="h-full">
+                <StatHeader
+                  title="Account return"
+                  icon={TrendingDown}
+                  hint="All-time realized net P&L divided by starting balance."
+                />
+                <CardContent>
+                  <div className={cn(
+                    "text-3xl font-semibold tracking-tight tnum",
+                    data.realizedPnl > 0 ? "text-profit" : data.realizedPnl < 0 ? "text-loss" : undefined,
+                  )}>
+                    {data.totalReturnPct === null ? "–" : fmtPercent(data.totalReturnPct)}
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    <MonetaryValue>{fmtMoney(data.realizedPnl)}</MonetaryValue> realized all-time
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+          },
           {
             id: "widget-0",
             label: "Net P&L",
