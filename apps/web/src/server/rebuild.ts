@@ -44,7 +44,7 @@ export const rebuildAccount = (accountId: string): void => {
       const preserved = preservedByKey.get(trip.key);
       const fundingFee = preserved?.fundingFee ?? 0;
       const leverage = preserved?.leverage ?? 1;
-      const netPnl = trip.netPnl + fundingFee;
+      const netPnl = trip.netPnl - fundingFee;
       const status: "open" | "win" | "loss" | "breakeven" =
         trip.status === "open"
           ? "open"
