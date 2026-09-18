@@ -191,7 +191,7 @@ export const PATCH = handler(async (request: Request, { params }: Params) => {
 
     if (row.key !== originalKey) {
       const preservedFunding = original.fundingFee ?? 0;
-      const preservedNetPnl = row.grossPnl - row.fees + preservedFunding;
+      const preservedNetPnl = row.grossPnl - row.fees - preservedFunding;
       db.transaction((tx) => {
         tx.update(trades)
           .set({
@@ -241,7 +241,7 @@ export const PATCH = handler(async (request: Request, { params }: Params) => {
   if (body.leverage !== undefined) patch.leverage = body.leverage;
   if (body.fundingFee !== undefined) {
     patch.fundingFee = body.fundingFee;
-    patch.netPnl = row.grossPnl - row.fees + body.fundingFee;
+    patch.netPnl = row.grossPnl - row.fees - body.fundingFee;
     if (row.closedAt) {
       patch.status = patch.netPnl > 0 ? "win" : patch.netPnl < 0 ? "loss" : "breakeven";
     }
