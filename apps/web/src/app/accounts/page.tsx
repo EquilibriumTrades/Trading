@@ -25,6 +25,9 @@ interface AccountRow {
   kind: "sync" | "import" | "manual";
   currency: string;
   initialBalance: number;
+  realizedPnl: number;
+  currentBalance: number;
+  totalReturnPct: number | null;
   profitCalcMethod: "fifo" | "lifo" | "wavg";
   autoSync: boolean;
   lastSyncAt: string | null;
@@ -136,6 +139,26 @@ function Accounts() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
+              <div className="grid grid-cols-3 gap-3 rounded-lg border p-3 text-sm">
+                <div>
+                  <div className="text-xs text-muted-foreground">Starting balance</div>
+                  <div className="tnum font-medium">
+                    <MonetaryValue>{fmtMoney(account.initialBalance)}</MonetaryValue>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Current account size</div>
+                  <div className="tnum font-medium">
+                    <MonetaryValue>{fmtMoney(account.currentBalance)}</MonetaryValue>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Total return</div>
+                  <div className="tnum font-medium">
+                    {account.totalReturnPct === null ? "–" : `${(account.totalReturnPct * 100).toFixed(2)}%`}
+                  </div>
+                </div>
+              </div>
               {account.snapshot && (
                 <div className="text-sm">
                   Broker equity:{" "}
@@ -151,7 +174,7 @@ function Accounts() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="text-xs text-muted-foreground">
-                    Initial balance (anchors drawdown %)
+                    Starting balance
                   </label>
                   <MonetaryField>
                     <Input
