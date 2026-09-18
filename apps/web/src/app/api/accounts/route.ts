@@ -1,5 +1,5 @@
 import { asc, eq } from "drizzle-orm";
-import { accounts, db } from "@/db";
+import { accounts, db, trades } from "@/db";
 import { bad, handler, ok } from "@/server/api";
 import { encryptJson } from "@/server/crypto";
 import { newId, nowIso } from "@/server/ids";
@@ -21,12 +21,26 @@ export const GET = handler((request: Request) => {
     });
   }
   const rows = db.select().from(accounts).orderBy(asc(accounts.createdAt)).all();
+  const realizedByAccount = new Map<string, number>();
+  for (const trade of db.select({ accountId: trades.accountId, status: trades.status, netPnl: trades.netPnl }).from(trades).all()) {
+    if (trade.status === "open") continue;
+    realizedByAccount.set(
+      trade.accountId,
+      (realizedByAccount.get(trade.accountId) ?? 0) + trade.netPnl,
+    );
+  }
   return ok({
-    accounts: rows.map(({ credentialsEnc, ...safe }) => ({
-      ...safe,
-      connected: credentialsEnc !== null,
-      snapshot: safe.snapshotJson ? JSON.parse(safe.snapshotJson) : null,
-    })),
+    accounts: rows.map(({ credentialsEnc, ...safe }) => {
+      const realizedPnl = realizedByAccount.get(safe.id) ?? 0;
+      return {
+        ...safe,
+        realizedPnl,
+        currentBalance: safe.initialBalance + realizedPnl,
+        totalReturnPct: safe.initialBalance > 0 ? realizedPnl / safe.initialBalance : null,
+        connected: credentialsEnc !== null,
+        snapshot: safe.snapshotJson ? JSON.parse(safe.snapshotJson) : null,
+      };
+    }),
   });
 });
 
