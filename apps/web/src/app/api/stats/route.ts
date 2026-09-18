@@ -15,7 +15,7 @@ import {
   dayKeyOf,
 } from "@luxalgo/journal-core";
 import { asc } from "drizzle-orm";
-import { accounts, db, playbooks } from "@/db";
+import { accounts, db, playbooks, trades as tradesTable } from "@/db";
 import { handler, ok } from "@/server/api";
 import { getTimeZone } from "@/server/settings";
 import { queryTrades, type TradeFilters } from "@/server/trades-query";
@@ -32,6 +32,15 @@ export const GET = handler(async (request: Request) => {
     ? accountRows.filter((a) => filters.accounts!.split(",").includes(a.id))
     : accountRows;
   const initialBalance = selected.reduce((total, a) => total + a.initialBalance, 0);
+  const selectedAccountIds = new Set(selected.map((account) => account.id));
+  const realizedPnl = db
+    .select({ accountId: tradesTable.accountId, status: tradesTable.status, netPnl: tradesTable.netPnl })
+    .from(tradesTable)
+    .all()
+    .filter((trade) => selectedAccountIds.has(trade.accountId) && trade.status !== "open")
+    .reduce((total, trade) => total + trade.netPnl, 0);
+  const currentBalance = initialBalance + realizedPnl;
+  const totalReturnPct = initialBalance > 0 ? realizedPnl / initialBalance : null;
 
   const { metrics, days, equity } = computeOverview(trades, { timeZone, initialBalance });
   const accountCurrencies = new Map(accountRows.map((a) => [a.id, a.currency]));
@@ -83,5 +92,8 @@ export const GET = handler(async (request: Request) => {
         status: t.status,
       })),
     initialBalance,
+    realizedPnl,
+    currentBalance,
+    totalReturnPct,
   });
 });
